@@ -8,12 +8,19 @@ typedef struct Game {
 } Game;
 
 Game* game_new(void) {
-    return malloc(sizeof(Game));
+    Game* game = malloc(sizeof(Game));
+    if (game == NULL) return NULL;
+
+    game->alive = false;
+    game->keep_alive = false;
+    game->window = NULL;
+
+    return game;
 }
 
 bool game_start(Game* game) {
   if (!SDL_Init(SDL_INIT_VIDEO)) {
-    printf("Failed to create SDL3 window! %s\n", SDL_GetError());
+    fprintf(stderr, "Failed to create SDL3 window! %s\n", SDL_GetError());
     return false;
   }
 
@@ -24,13 +31,15 @@ bool game_start(Game* game) {
     SDL_WINDOW_RESIZABLE
   );
   if (window == NULL) {
-    printf("Failed to create SDL3 window! %s\n", SDL_GetError());
+    fprintf(stderr, "Failed to create SDL3 window! %s\n", SDL_GetError());
     return false;
   }
 
   game->window = window;
   game->alive = true;
   game->keep_alive = true;
+
+  printf("Started game session..\n");
   return true;
 }
 
@@ -59,4 +68,6 @@ void game_close(Game* game) {
 
   free(game);
   SDL_Quit();
+
+  printf("Closed game session..\n");
 }

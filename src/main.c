@@ -3,7 +3,7 @@
 int main() {
   Game* game = game_new();
   if (!game_start(game)) {
-    printf("Failed to start game!");
+    fprintf(stderr, "Failed to start game!\n");
     return -1;
   }
 
