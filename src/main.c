@@ -67,10 +67,19 @@ int main() {
     return -1;
   }
 
+  free(all_instance_extensions);
+
+  VkSurfaceKHR surface = NULL;
+  SDL_Window* window = game_get_window(game);
+  if (!SDL_Vulkan_CreateSurface(window, instance, NULL, &surface)) {
+    fprintf(stderr, "Failed to create vulkan surface from SDL3! %s\n ", SDL_GetError());
+    return -1;
+  }
+
   u32 physical_device_count = 0;
-  vkEnumeratePhysicalDevices(instance, &physical_device_count, NULL);
+  VkResult get_physical_devices = vkEnumeratePhysicalDevices(instance, &physical_device_count, NULL);
   if (physical_device_count == 0) {
-    fprintf(stderr, "Failed to find any physical devices!");
+    fprintf(stderr, "Failed to find any physical devices! %d\n", get_physical_devices);
     return -1;
   }
 
@@ -110,8 +119,73 @@ int main() {
   }
 
   if (best_device == NULL) {
-    fprintf(stderr, "Failed to find the best suitable physical device!");
+    fprintf(stderr, "Failed to find the best suitable physical device!\n");
     return -1;
+  }
+
+  u32 queue_family_count = 0;
+  vkGetPhysicalDeviceQueueFamilyProperties(best_device, &queue_family_count, NULL);
+  if (queue_family_count == 0) {
+    fprintf(stderr, "No queue families found from physical device!\n");
+    return -1;
+  }
+
+  VkQueueFamilyProperties queue_families[queue_family_count];
+  vkGetPhysicalDeviceQueueFamilyProperties(best_device, &queue_family_count, queue_families);
+
+  u32 graphics_family = UINT32_MAX;
+  u32 present_family = UINT32_MAX;
+
+  for (u32 i = 0; i < queue_family_count; i++) {
+    VkQueueFamilyProperties queue_family = queue_families[i];
+    if (queue_family.queueFlags & VK_QUEUE_GRAPHICS_BIT && graphics_family == UINT32_MAX) {
+      graphics_family = i;
+    }
+
+    VkBool32 presentable = VK_FALSE;
+    vkGetPhysicalDeviceSurfaceSupportKHR(best_device, i, surface, &presentable);
+    if (presentable == VK_TRUE && present_family == UINT32_MAX) {
+      present_family = i;
+    }
+
+    if (graphics_family != UINT32_MAX 
+        && present_family != UINT32_MAX) {
+          break;
+    }
+  }
+
+  if (graphics_family == UINT32_MAX
+      || present_family == UINT32_MAX) {
+        fprintf(stderr, "Failed to get graphics and present support!\n");
+        return -1;
+  }
+  
+  u32 device_queue_count = 0;
+  VkDeviceQueueCreateInfo device_queue_info[2];
+
+  f32 queue_priority = 1.0f;
+  VkDeviceQueueCreateInfo graphics_queue_info = {
+    .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
+    .pNext = NULL,
+    .flags = 0,
+    .pQueuePriorities = &queue_priority,
+    .queueFamilyIndex = graphics_family,
+    .queueCount = 1,
+  };
+  device_queue_info[0] = graphics_queue_info;
+  device_queue_count++;
+
+  if (present_family != graphics_family) {
+    VkDeviceQueueCreateInfo present_queue_info = {
+      .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
+      .pNext = NULL,
+      .flags = 0,
+      .pQueuePriorities = &queue_priority,
+      .queueFamilyIndex = present_family,
+      .queueCount = 1,
+    };
+    device_queue_info[1] = present_queue_info;
+    device_queue_count++;
   }
 
   const char* device_extensions[] = {
@@ -121,15 +195,15 @@ int main() {
   };
   const char* device_layers[] = {};
 
-  u32 device_extension_count = sizeof(device_extensions) / sizeof(char*);
-  u32 device_layer_count = sizeof(device_layers) / sizeof(char*);
+  u32 device_extension_count = sizeof(device_extensions) / sizeof(device_extensions[0]);
+  u32 device_layer_count = sizeof(device_layers) / sizeof(device_extensions[0]);
 
   VkDeviceCreateInfo device_info = {
     .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
     .pNext = NULL,
     .flags = 0,
-    .pQueueCreateInfos = NULL,
-    .queueCreateInfoCount = 0,
+    .pQueueCreateInfos = device_queue_info,
+    .queueCreateInfoCount = device_queue_count,
     .enabledExtensionCount = device_extension_count,
     .ppEnabledExtensionNames = device_extensions,
     .enabledLayerCount = device_layer_count,
@@ -146,6 +220,8 @@ int main() {
   while (game_is_alive(game)) {
     game_update(game);
   }
+
+  vkDestroySurfaceKHR(instance, surface, NULL);
   vkDestroyDevice(device, NULL);
   vkDestroyInstance(instance, NULL);
 

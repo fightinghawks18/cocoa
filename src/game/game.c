@@ -28,7 +28,7 @@ bool game_start(Game* game) {
     "Cocoa", 
     800, 
     600, 
-    SDL_WINDOW_RESIZABLE
+    SDL_WINDOW_RESIZABLE | SDL_WINDOW_VULKAN
   );
   if (window == NULL) {
     fprintf(stderr, "Failed to create SDL3 window! %s\n", SDL_GetError());
@@ -55,6 +55,10 @@ void game_update(Game* game) {
 
 bool game_is_alive(Game* game) {
   return game->keep_alive && game->alive;
+}
+
+SDL_Window* game_get_window(Game* game) {
+  return game->window;
 }
 
 void game_close(Game* game) {

@@ -10,6 +10,7 @@ Game* game_new(void);
 bool game_start(Game* game);
 void game_update(Game* game);
 bool game_is_alive(Game* game);
+SDL_Window* game_get_window(Game* game);
 void game_close(Game* game);
 
 #endif // GAME_H
