@@ -160,6 +160,7 @@ int main() {
         return -1;
   }
   
+  // FIXME: This looks ugly, use malloc or realloc later
   u32 device_queue_count = 0;
   VkDeviceQueueCreateInfo device_queue_info[2];
 
@@ -189,6 +190,7 @@ int main() {
   }
 
   const char* device_extensions[] = {
+    "VK_KHR_swapchain",
     #ifdef __APPLE__
       "VK_KHR_portability_subset"
     #endif
@@ -217,10 +219,84 @@ int main() {
     return -1;
   }
 
+  int w, h;
+  SDL_GetWindowSize(window, &w, &h);
+
+  u32 min_image_count = 2;
+  VkFormat swapchain_image_format = VK_FORMAT_B8G8R8A8_SRGB;
+  VkSwapchainCreateInfoKHR swapchain_info = {
+    .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
+    .pNext = NULL,
+    .flags = 0,
+    .surface = surface,
+    .minImageCount = min_image_count,
+    .imageFormat = swapchain_image_format,
+    .imageColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR,
+    .imageExtent = {w, h},
+    .imageArrayLayers = 1,
+    .imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+    .imageSharingMode = VK_SHARING_MODE_EXCLUSIVE,
+    .queueFamilyIndexCount = 0,
+    .pQueueFamilyIndices = NULL,
+    .preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR,
+    .compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
+    .presentMode = VK_PRESENT_MODE_FIFO_KHR,
+    .clipped = VK_TRUE,
+    .oldSwapchain = NULL
+  };
+
+  VkSwapchainKHR swapchain = NULL;
+  VkResult swapchain_create = vkCreateSwapchainKHR(device, &swapchain_info, NULL, &swapchain);
+  if (swapchain_create != VK_SUCCESS) {
+    fprintf(stderr, "Failed to create vulkan swapchain! %d\n", swapchain_create);
+    return -1;
+  }
+
+  u32 swapchain_image_count = 0;
+  vkGetSwapchainImagesKHR(device, swapchain, &swapchain_image_count, NULL);
+  VkImage swapchain_images[swapchain_image_count];
+  vkGetSwapchainImagesKHR(device, swapchain, &swapchain_image_count, swapchain_images);
+
+  VkImageView swapchain_image_views[min_image_count];
+  for (u32 i = 0; i < swapchain_image_count; i++) {
+    VkImageViewCreateInfo image_view_info = {
+      .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+      .pNext = NULL,
+      .flags = 0,
+      .image = swapchain_images[i],
+      .viewType = VK_IMAGE_VIEW_TYPE_2D,
+      .format = swapchain_image_format,
+      .components = {
+        .r = VK_COMPONENT_SWIZZLE_IDENTITY,
+        .b = VK_COMPONENT_SWIZZLE_IDENTITY,
+        .g = VK_COMPONENT_SWIZZLE_IDENTITY,
+        .a = VK_COMPONENT_SWIZZLE_IDENTITY,
+      },
+      .subresourceRange = {
+        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+        .baseMipLevel = 0,
+        .levelCount = 1,
+        .baseArrayLayer = 0,
+        .layerCount = 1,
+      }
+    };
+
+    VkResult image_view_create = vkCreateImageView(device, &image_view_info, NULL, &swapchain_image_views[i]);
+    if (image_view_create != VK_SUCCESS) {
+      fprintf(stderr, "Failed to create image view for index %d! %d\n", i, image_view_create);
+      return -1;
+    }
+  }
+
   while (game_is_alive(game)) {
     game_update(game);
   }
 
+  for (u32 i = 0; i < swapchain_image_count; i++) {
+    vkDestroyImageView(device, swapchain_image_views[i], NULL);
+  }
+
+  vkDestroySwapchainKHR(device, swapchain, NULL);
   vkDestroySurfaceKHR(instance, surface, NULL);
   vkDestroyDevice(device, NULL);
   vkDestroyInstance(instance, NULL);
