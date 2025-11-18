@@ -8,7 +8,8 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/bin)
 find_package(SDL3 CONFIG REQUIRED)
 
 add_executable(Cocoa
-        main.c
+        src/main.c
+        src/game/game.c
 )
 
 target_link_libraries(Cocoa
