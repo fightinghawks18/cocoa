@@ -5,6 +5,4 @@
 .cache/
 
 # CMake
-build-*/
-cmake-build-*/
-cmake-build/
+out/
