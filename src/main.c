@@ -61,15 +61,92 @@ int main() {
   #endif
 
   VkInstance instance = NULL;
-  VkResult result = vkCreateInstance(&instance_info, NULL, &instance);
-  if (result != VK_SUCCESS) {
-    fprintf(stderr, "Failed to create vulkan instance! %d\n", result);
+  VkResult instance_create = vkCreateInstance(&instance_info, NULL, &instance);
+  if (instance_create != VK_SUCCESS) {
+    fprintf(stderr, "Failed to create vulkan instance! %d\n", instance_create);
+    return -1;
+  }
+
+  u32 physical_device_count = 0;
+  vkEnumeratePhysicalDevices(instance, &physical_device_count, NULL);
+  if (physical_device_count == 0) {
+    fprintf(stderr, "Failed to find any physical devices!");
+    return -1;
+  }
+
+  VkPhysicalDevice physical_devices[physical_device_count];
+  vkEnumeratePhysicalDevices(instance, &physical_device_count, physical_devices);
+
+  u32 best_score = 0;
+  VkPhysicalDevice best_device = NULL;
+  for (u32 i = 0; i < physical_device_count; i++) {
+    u32 score = 0;
+    
+    VkPhysicalDeviceProperties properties;
+    vkGetPhysicalDeviceProperties(physical_devices[i], &properties);
+    VkPhysicalDeviceFeatures features;
+    vkGetPhysicalDeviceFeatures(physical_devices[i], &features);
+
+    switch (properties.deviceType) {
+      case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU:
+        score += 1000;
+        break;
+      case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU:
+        score += 500;
+        break;
+      case VK_PHYSICAL_DEVICE_TYPE_OTHER:
+      case VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU:
+      case VK_PHYSICAL_DEVICE_TYPE_CPU:
+      case VK_PHYSICAL_DEVICE_TYPE_MAX_ENUM:
+        break;
+    }
+
+    score += properties.limits.maxImageDimension2D;
+
+    if (score > best_score) {
+      best_score = score;
+      best_device = physical_devices[i];
+    }
+  }
+
+  if (best_device == NULL) {
+    fprintf(stderr, "Failed to find the best suitable physical device!");
+    return -1;
+  }
+
+  const char* device_extensions[] = {
+    #ifdef __APPLE__
+      "VK_KHR_portability_subset"
+    #endif
+  };
+  const char* device_layers[] = {};
+
+  u32 device_extension_count = sizeof(device_extensions) / sizeof(char*);
+  u32 device_layer_count = sizeof(device_layers) / sizeof(char*);
+
+  VkDeviceCreateInfo device_info = {
+    .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
+    .pNext = NULL,
+    .flags = 0,
+    .pQueueCreateInfos = NULL,
+    .queueCreateInfoCount = 0,
+    .enabledExtensionCount = device_extension_count,
+    .ppEnabledExtensionNames = device_extensions,
+    .enabledLayerCount = device_layer_count,
+    .ppEnabledLayerNames = device_layers
+  };
+  
+  VkDevice device = NULL;
+  VkResult device_create = vkCreateDevice(best_device, &device_info, NULL, &device);
+  if (device_create != VK_SUCCESS) {
+    fprintf(stderr, "Failed to create vulkan device! %d\n", device_create);
     return -1;
   }
 
   while (game_is_alive(game)) {
     game_update(game);
   }
+  vkDestroyDevice(device, NULL);
   vkDestroyInstance(instance, NULL);
 
   game_close(game);
