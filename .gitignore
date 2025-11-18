@@ -1,0 +1,10 @@
+# JetBrains
+.idea/
+
+# Clang
+.cache/
+
+# CMake
+build-*/
+cmake-build-*/
+cmake-build/
