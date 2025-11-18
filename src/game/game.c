@@ -20,7 +20,7 @@ Game* game_new(void) {
 
 bool game_start(Game* game) {
   if (!SDL_Init(SDL_INIT_VIDEO)) {
-    fprintf(stderr, "Failed to create SDL3 window! %s\n", SDL_GetError());
+    fprintf(stderr, "Failed to start SDL3! %s\n", SDL_GetError());
     return false;
   }
 

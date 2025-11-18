@@ -6,6 +6,7 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/bin)
 
 find_package(SDL3 CONFIG REQUIRED)
+find_package(Vulkan REQUIRED)
 
 add_executable(Cocoa
         src/main.c
@@ -15,20 +16,21 @@ add_executable(Cocoa
 target_link_libraries(Cocoa
         PUBLIC
         SDL3::SDL3
+        Vulkan::Vulkan
 )
 
 if(APPLE)
-    target_link_libraries(Cocoa 
-            PRIVATE
-            "-framework AppKit"
-    )
+   target_link_libraries(Cocoa 
+        PRIVATE
+        "-framework AppKit"
+   )
 endif()
 
 if(CMAKE_EXPORT_COMPILE_COMMANDS)
-  add_custom_target(copy_compiled_commands ALL
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            ${CMAKE_CURRENT_BINARY_DIR}/compile_commands.json
-            ${CMAKE_CURRENT_BINARY_DIR}/../
-            COMMENT "Copying compiled commands to ${CMAKE_CURRENT_BINARY_DIR}/../"
-  )
+   add_custom_target(copy_compiled_commands ALL
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        ${CMAKE_CURRENT_BINARY_DIR}/compile_commands.json
+        ${CMAKE_CURRENT_BINARY_DIR}/../
+        COMMENT "Copying compiled commands to ${CMAKE_CURRENT_BINARY_DIR}/../"
+   )
 endif()
