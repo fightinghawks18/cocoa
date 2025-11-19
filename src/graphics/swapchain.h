@@ -12,22 +12,19 @@ typedef struct {
     VkColorSpaceKHR color_space;
 } SwapchainOptions;
 
-typedef struct {
-    VkSwapchainKHR swapchain;
-    VkSurfaceKHR surface;
-    VkImage* images;
-    VkImageView* image_views;
-    
-    VkExtent2D extent;
-    VkFormat format;
-    VkColorSpaceKHR color_space;
-    
-    u32 min_image_count;
-    u32 image_count;
-} Swapchain;
+typedef struct Swapchain Swapchain;
 
 Swapchain* swapchain_new(VkDevice device, VkPhysicalDevice physical_device, SwapchainOptions options);
 void swapchain_free(VkDevice device, Swapchain* swapchain);
 void swapchain_resize(VkDevice device, VkPhysicalDevice physical_device, Swapchain* swapchain);
+
+VkSwapchainKHR swapchain_get_vk_swapchain(Swapchain* swapchain);
+VkSurfaceKHR swapchain_get_vk_surface(Swapchain* swapchain);
+VkImage* swapchain_get_vk_images(Swapchain* swapchain);
+VkImageView* swapchain_get_vk_image_views(Swapchain* swapchain);
+VkExtent2D swapchain_get_extent(Swapchain* swapchain);
+VkFormat swapchain_get_format(Swapchain* swapchain);
+VkColorSpaceKHR swapchain_get_color_space(Swapchain* swapchain);
+u32 swapchain_get_image_count(Swapchain* swapchain);
 
 #endif // SWAPCHAIN_H

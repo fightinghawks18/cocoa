@@ -3,6 +3,20 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+typedef struct Swapchain {
+    VkSwapchainKHR swapchain;
+    VkSurfaceKHR surface;
+    VkImage* images;
+    VkImageView* image_views;
+    
+    VkExtent2D extent;
+    VkFormat format;
+    VkColorSpaceKHR color_space;
+    
+    u32 min_image_count;
+    u32 image_count;
+} Swapchain;
+
 static void swapchain_create_images(VkDevice device, Swapchain* swapchain) {
     u32 swapchain_image_count = 0;
     vkGetSwapchainImagesKHR(device, swapchain->swapchain, &swapchain_image_count, NULL);
@@ -130,4 +144,36 @@ void swapchain_resize(VkDevice device, VkPhysicalDevice physical_device, Swapcha
     swapchain_free_resources(device, swapchain);
     *swapchain = *new_swapchain;
     free(new_swapchain);
+}
+
+VkSwapchainKHR swapchain_get_vk_swapchain(Swapchain* swapchain) {
+  return swapchain->swapchain;
+}
+
+VkSurfaceKHR swapchain_get_vk_surface(Swapchain* swapchain) {
+  return swapchain->surface;
+}
+
+VkImage* swapchain_get_vk_images(Swapchain* swapchain) {
+  return swapchain->images;
+}
+
+VkImageView* swapchain_get_vk_image_views(Swapchain* swapchain) {
+  return swapchain->image_views;
+}
+
+VkExtent2D swapchain_get_extent(Swapchain* swapchain) {
+  return swapchain->extent;
+}
+
+VkFormat swapchain_get_format(Swapchain* swapchain) {
+  return swapchain->format;
+}
+
+VkColorSpaceKHR swapchain_get_color_space(Swapchain* swapchain) {
+  return swapchain->color_space;
+}
+
+u32 swapchain_get_image_count(Swapchain* swapchain) {
+  return swapchain->image_count;
 }

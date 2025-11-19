@@ -3,6 +3,16 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+typedef struct Renderer {
+    Frame** frames;
+    Swapchain* current_swapchain;
+
+    u32 current_image_index;
+    u32 frame_index;
+    u32 max_flight;
+    u32 graphics_family;
+} Renderer;
+
 static void renderer_create_frames(VkDevice device, u32 graphics_family, Renderer* renderer) {
     renderer->frames = malloc(renderer->max_flight * sizeof(Frame*));
     for (u32 i = 0; i < renderer->max_flight; i++) {
@@ -111,7 +121,7 @@ const Frame* renderer_begin_rendering(VkDevice device, VkPhysicalDevice physical
     }
     
     u32 image_index = UINT32_MAX;
-    u32 get_next_image = vkAcquireNextImageKHR(device, swapchain->swapchain, INFINITY, frame->image_available_semaphore, NULL, &image_index);
+    u32 get_next_image = vkAcquireNextImageKHR(device, swapchain_get_vk_swapchain(swapchain), INFINITY, frame->image_available_semaphore, NULL, &image_index);
     if (get_next_image == VK_SUBOPTIMAL_KHR || (int)get_next_image == VK_ERROR_OUT_OF_DATE_KHR) {
       printf("Resizing swapchain for index %d\n", frame_index);
       swapchain_resize(device, physical_device, swapchain);
@@ -151,7 +161,7 @@ const Frame* renderer_begin_rendering(VkDevice device, VkPhysicalDevice physical
       .newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
       .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
       .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-      .image = swapchain->images[image_index],
+      .image = swapchain_get_vk_images(swapchain)[image_index],
       .subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
       .subresourceRange.baseMipLevel = 0,
       .subresourceRange.levelCount = 1,
@@ -188,7 +198,7 @@ bool renderer_end_rendering(VkQueue graphics_queue, VkQueue present_queue, Rende
       .newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
       .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
       .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-      .image = renderer->current_swapchain->images[renderer->current_image_index],
+      .image = swapchain_get_vk_images(renderer->current_swapchain)[renderer->current_image_index],
       .subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
       .subresourceRange.baseMipLevel = 0,
       .subresourceRange.levelCount = 1,
@@ -230,13 +240,15 @@ bool renderer_end_rendering(VkQueue graphics_queue, VkQueue present_queue, Rende
       return false;
     }
 
+    VkSwapchainKHR swapchain = swapchain_get_vk_swapchain(renderer->current_swapchain);
+
     VkPresentInfoKHR present_info = {
       .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
       .pNext = NULL,
       .waitSemaphoreCount = 1,
       .pWaitSemaphores = &frame->render_finished_semaphore,
       .swapchainCount = 1,
-      .pSwapchains = &renderer->current_swapchain->swapchain,
+      .pSwapchains = &swapchain,
       .pImageIndices = &renderer->current_image_index,
       .pResults = NULL
     };
@@ -256,4 +268,12 @@ bool renderer_end_rendering(VkQueue graphics_queue, VkQueue present_queue, Rende
 void renderer_rebuild_resources(VkDevice device, Renderer* renderer) {
     renderer_free_frames(device, renderer);
     renderer_create_frames(device, renderer->graphics_family, renderer);
+}
+
+Swapchain* renderer_get_swapchain(Renderer* renderer) {
+    return renderer->current_swapchain;
+}
+
+u32 renderer_get_image_index(Renderer* renderer) {
+    return renderer->current_image_index;
 }

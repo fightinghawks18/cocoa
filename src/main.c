@@ -257,7 +257,7 @@ int main() {
     VkRenderingAttachmentInfo rendering_attachment = {
       .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
       .pNext = NULL,
-      .imageView = renderer->current_swapchain->image_views[renderer->current_image_index],
+      .imageView = swapchain_get_vk_image_views(renderer_get_swapchain(renderer))[renderer_get_image_index(renderer)],
       .imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
       .resolveMode = VK_RESOLVE_MODE_NONE,
       .resolveImageView = NULL,
@@ -273,7 +273,7 @@ int main() {
       .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
       .pNext = NULL,
       .flags = 0,
-      .renderArea = {{0, 0}, swapchain->extent},
+      .renderArea = {{0, 0}, swapchain_get_extent(swapchain)},
       .layerCount = 1,
       .viewMask = 0,
       .colorAttachmentCount = 1,
