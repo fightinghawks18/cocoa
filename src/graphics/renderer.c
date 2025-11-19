@@ -13,7 +13,7 @@ typedef struct Renderer {
     u32 graphics_family;
 } Renderer;
 
-static void renderer_create_frames(VkDevice device, u32 graphics_family, Renderer* renderer) {
+static void renderer_create_frames(Device* device, Renderer* renderer) {
     renderer->frames = malloc(renderer->max_flight * sizeof(Frame*));
     for (u32 i = 0; i < renderer->max_flight; i++) {
         Frame* frame = malloc(sizeof(Frame));
@@ -22,10 +22,10 @@ static void renderer_create_frames(VkDevice device, u32 graphics_family, Rendere
           .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
           .pNext = NULL,
           .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
-          .queueFamilyIndex = graphics_family
+          .queueFamilyIndex = renderer->graphics_family
         };
     
-        VkResult command_pool_create = vkCreateCommandPool(device, &command_pool_info, NULL, &frame->cmd_pool);
+        VkResult command_pool_create = vkCreateCommandPool(device_get_vk_device(device), &command_pool_info, NULL, &frame->cmd_pool);
         if (command_pool_create != VK_SUCCESS) {
           fprintf(stderr, "Failed to create vulkan command pool! %d\n", command_pool_create);
           return;
@@ -37,13 +37,13 @@ static void renderer_create_frames(VkDevice device, u32 graphics_family, Rendere
             .flags = 0
           };
       
-        VkResult image_available_semaphore_create = vkCreateSemaphore(device, &semaphore_create_info, NULL, &frame->image_available_semaphore);
+        VkResult image_available_semaphore_create = vkCreateSemaphore(device_get_vk_device(device), &semaphore_create_info, NULL, &frame->image_available_semaphore);
         if (image_available_semaphore_create != VK_SUCCESS) {
           fprintf(stderr, "Failed to create vulkan image available semaphore for index %d! %d\n", i, image_available_semaphore_create);
           return;
         }
     
-        VkResult render_finished_semaphore_create = vkCreateSemaphore(device, &semaphore_create_info, NULL, &frame->render_finished_semaphore);
+        VkResult render_finished_semaphore_create = vkCreateSemaphore(device_get_vk_device(device), &semaphore_create_info, NULL, &frame->render_finished_semaphore);
         if (image_available_semaphore_create != VK_SUCCESS) {
           fprintf(stderr, "Failed to create vulkan render finished semaphore for index %d! %d\n", i, render_finished_semaphore_create);
           return;
@@ -55,7 +55,7 @@ static void renderer_create_frames(VkDevice device, u32 graphics_family, Rendere
           .flags = VK_FENCE_CREATE_SIGNALED_BIT
         };
     
-        VkResult fence_create = vkCreateFence(device, &fence_info, NULL, &frame->fence);
+        VkResult fence_create = vkCreateFence(device_get_vk_device(device), &fence_info, NULL, &frame->fence);
         if (fence_create != VK_SUCCESS) {
           fprintf(stderr, "Failed to create vulkan fence for index %d! %d\n", i, fence_create);
           return;
@@ -69,7 +69,7 @@ static void renderer_create_frames(VkDevice device, u32 graphics_family, Rendere
           .commandBufferCount = 1
         };
     
-        VkResult command_buffer_create = vkAllocateCommandBuffers(device, &command_buffer_info, &frame->cmd);
+        VkResult command_buffer_create = vkAllocateCommandBuffers(device_get_vk_device(device), &command_buffer_info, &frame->cmd);
         if (command_buffer_create != VK_SUCCESS) {
           fprintf(stderr, "Failed to create vulkan command buffer for index %d! %d\n", i, command_buffer_create);
           return;
@@ -79,52 +79,51 @@ static void renderer_create_frames(VkDevice device, u32 graphics_family, Rendere
     }
 }
 
-static void renderer_free_frames(VkDevice device, Renderer* renderer) {
-    vkDeviceWaitIdle(device);
+static void renderer_free_frames(Device* device, Renderer* renderer) {
+    device_wait(device);
     for (u32 i = 0; i < renderer->max_flight; i++) {
         Frame* frame = renderer->frames[i];
-        vkDestroySemaphore(device, frame->image_available_semaphore, NULL);
-        vkDestroySemaphore(device, frame->render_finished_semaphore, NULL);
-        vkDestroyFence(device, frame->fence, NULL);
-  
-        vkDestroyCommandPool(device, frame->cmd_pool, NULL);
+        vkDestroySemaphore(device_get_vk_device(device), frame->image_available_semaphore, NULL);
+        vkDestroySemaphore(device_get_vk_device(device), frame->render_finished_semaphore, NULL);
+        vkDestroyFence(device_get_vk_device(device), frame->fence, NULL);
+        vkDestroyCommandPool(device_get_vk_device(device), frame->cmd_pool, NULL);
         free(frame);
     }
     free(renderer->frames);
 }
 
-Renderer* renderer_new(VkDevice device, u32 graphics_family, u32 max_frames_in_flight) {
+Renderer* renderer_new(Device* device, u32 max_frames_in_flight) {
     Renderer* renderer = malloc(sizeof(Renderer));
     renderer->max_flight = max_frames_in_flight;
     renderer->frame_index = 0;
     renderer->current_swapchain = NULL;
     renderer->current_image_index = 0;
-    renderer->graphics_family = graphics_family;
+    renderer->graphics_family = device_get_graphics_family(device);
 
-    renderer_create_frames(device, graphics_family, renderer);
+    renderer_create_frames(device, renderer);
     return renderer;
 }
 
-void renderer_free(VkDevice device, Renderer* renderer) {
+void renderer_free(Device* device, Renderer* renderer) {
     renderer_free_frames(device, renderer);
     free(renderer);
 }
 
-const Frame* renderer_begin_rendering(VkDevice device, VkPhysicalDevice physical_device, Renderer* renderer, Swapchain* swapchain) {
+const Frame* renderer_begin_rendering(Device* device, Renderer* renderer, Swapchain* swapchain) {
     u32 frame_index = renderer->frame_index;
     Frame* frame = renderer->frames[frame_index];
 
-    VkResult wait_for_fence = vkWaitForFences(device, 1, &frame->fence, VK_TRUE, INFINITY);
+    VkResult wait_for_fence = vkWaitForFences(device_get_vk_device(device), 1, &frame->fence, VK_TRUE, UINT64_MAX);
     if (wait_for_fence != VK_SUCCESS) {
       fprintf(stderr, "Failed to wait on fence for index %d! %d\n", frame_index, wait_for_fence);
       return NULL;
     }
     
     u32 image_index = UINT32_MAX;
-    u32 get_next_image = vkAcquireNextImageKHR(device, swapchain_get_vk_swapchain(swapchain), INFINITY, frame->image_available_semaphore, NULL, &image_index);
+    u32 get_next_image = vkAcquireNextImageKHR(device_get_vk_device(device), swapchain_get_vk_swapchain(swapchain), UINT64_MAX, frame->image_available_semaphore, NULL, &image_index);
     if (get_next_image == VK_SUBOPTIMAL_KHR || (int)get_next_image == VK_ERROR_OUT_OF_DATE_KHR) {
       printf("Resizing swapchain for index %d\n", frame_index);
-      swapchain_resize(device, physical_device, swapchain);
+      swapchain_resize(device, swapchain);
       renderer_rebuild_resources(device, renderer);
       return NULL;
     } else if (get_next_image != VK_SUCCESS) {
@@ -132,7 +131,7 @@ const Frame* renderer_begin_rendering(VkDevice device, VkPhysicalDevice physical
       return NULL;
     }
 
-    VkResult reset_fence = vkResetFences(device, 1, &frame->fence);
+    VkResult reset_fence = vkResetFences(device_get_vk_device(device), 1, &frame->fence);
     if (reset_fence != VK_SUCCESS) {
       fprintf(stderr, "Failed to reset fence for index %d! %d\n", frame_index, reset_fence);
       return NULL;
@@ -184,7 +183,7 @@ const Frame* renderer_begin_rendering(VkDevice device, VkPhysicalDevice physical
     return frame;
 }
 
-bool renderer_end_rendering(VkQueue graphics_queue, VkQueue present_queue, Renderer* renderer) {
+bool renderer_end_rendering(Device* device, Renderer* renderer) {
     u32 frame_index = renderer->frame_index;
     Frame* frame = renderer->frames[frame_index];
 
@@ -234,7 +233,7 @@ bool renderer_end_rendering(VkQueue graphics_queue, VkQueue present_queue, Rende
       .pSignalSemaphores = &frame->render_finished_semaphore
     };
 
-    VkResult submit = vkQueueSubmit(graphics_queue, 1, &submit_info, frame->fence);
+    VkResult submit = vkQueueSubmit(device_get_graphics_queue(device), 1, &submit_info, frame->fence);
     if (submit != VK_SUCCESS) {
       fprintf(stderr, "Failed to submit graphics for index %d! %d\n", frame_index, submit);
       return false;
@@ -253,7 +252,7 @@ bool renderer_end_rendering(VkQueue graphics_queue, VkQueue present_queue, Rende
       .pResults = NULL
     };
 
-    VkResult present = vkQueuePresentKHR(present_queue, &present_info);
+    VkResult present = vkQueuePresentKHR(device_get_graphics_queue(device), &present_info);
     if (present != VK_SUCCESS) {
       fprintf(stderr, "Failed to present graphics for index %d! %d\n", frame_index, present);
       return false;
@@ -265,9 +264,9 @@ bool renderer_end_rendering(VkQueue graphics_queue, VkQueue present_queue, Rende
     return true;
 }
 
-void renderer_rebuild_resources(VkDevice device, Renderer* renderer) {
+void renderer_rebuild_resources(Device* device, Renderer* renderer) {
     renderer_free_frames(device, renderer);
-    renderer_create_frames(device, renderer->graphics_family, renderer);
+    renderer_create_frames(device, renderer);
 }
 
 Swapchain* renderer_get_swapchain(Renderer* renderer) {

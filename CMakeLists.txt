@@ -13,6 +13,7 @@ add_executable(Cocoa
         src/game/game.c
         src/graphics/swapchain.c
         src/graphics/renderer.c
+        src/graphics/device.c
 )
 
 target_link_libraries(Cocoa

@@ -1,8 +1,8 @@
 #ifndef SWAPCHAIN_H
 #define SWAPCHAIN_H
 
-#include <vulkan/vulkan.h>
 #include "../int_types.h"
+#include "device.h"
 
 typedef struct {
     VkSwapchainKHR oldSwapchain;
@@ -14,9 +14,9 @@ typedef struct {
 
 typedef struct Swapchain Swapchain;
 
-Swapchain* swapchain_new(VkDevice device, VkPhysicalDevice physical_device, SwapchainOptions options);
-void swapchain_free(VkDevice device, Swapchain* swapchain);
-void swapchain_resize(VkDevice device, VkPhysicalDevice physical_device, Swapchain* swapchain);
+Swapchain* swapchain_new(Device* device, SwapchainOptions options);
+void swapchain_free(Device* device, Swapchain* swapchain);
+void swapchain_resize(Device* device, Swapchain* swapchain);
 
 VkSwapchainKHR swapchain_get_vk_swapchain(Swapchain* swapchain);
 VkSurfaceKHR swapchain_get_vk_surface(Swapchain* swapchain);

@@ -17,12 +17,12 @@ typedef struct Swapchain {
     u32 image_count;
 } Swapchain;
 
-static void swapchain_create_images(VkDevice device, Swapchain* swapchain) {
+static void swapchain_create_images(Device* device, Swapchain* swapchain) {
     u32 swapchain_image_count = 0;
-    vkGetSwapchainImagesKHR(device, swapchain->swapchain, &swapchain_image_count, NULL);
+    vkGetSwapchainImagesKHR(device_get_vk_device(device), swapchain->swapchain, &swapchain_image_count, NULL);
     
     VkImage* swapchain_images = malloc(swapchain_image_count * sizeof(VkImage));
-    vkGetSwapchainImagesKHR(device, swapchain->swapchain, &swapchain_image_count, swapchain_images);
+    vkGetSwapchainImagesKHR(device_get_vk_device(device), swapchain->swapchain, &swapchain_image_count, swapchain_images);
 
     swapchain->images = swapchain_images;
     swapchain->image_count = swapchain_image_count;
@@ -51,31 +51,31 @@ static void swapchain_create_images(VkDevice device, Swapchain* swapchain) {
         }
       };
     
-      VkResult image_view_create = vkCreateImageView(device, &image_view_info, NULL, &swapchain->image_views[i]);
+      VkResult image_view_create = vkCreateImageView(device_get_vk_device(device), &image_view_info, NULL, &swapchain->image_views[i]);
       if (image_view_create != VK_SUCCESS) {
         fprintf(stderr, "Failed to create vulkan image view for index %d! %d\n", i, image_view_create);
       }
     }
 }
 
-static void swapchain_free_images(VkDevice device, Swapchain* swapchain) {
+static void swapchain_free_images(Device* device, Swapchain* swapchain) {
   for (u32 i = 0; i < swapchain->image_count; i++) {
-      vkDestroyImageView(device, swapchain->image_views[i], NULL);
+      vkDestroyImageView(device_get_vk_device(device), swapchain->image_views[i], NULL);
   }
   free(swapchain->image_views);
   free(swapchain->images);
 }
 
-static void swapchain_free_resources(VkDevice device, Swapchain* swapchain) {
+static void swapchain_free_resources(Device* device, Swapchain* swapchain) {
   swapchain_free_images(device, swapchain);
-  vkDestroySwapchainKHR(device, swapchain->swapchain, NULL);
+  vkDestroySwapchainKHR(device_get_vk_device(device), swapchain->swapchain, NULL);
 }
 
-Swapchain* swapchain_new(VkDevice device, VkPhysicalDevice physical_device, SwapchainOptions options) {
+Swapchain* swapchain_new(Device* device, SwapchainOptions options) {
     Swapchain* swapchain = malloc(sizeof(Swapchain));
 
     VkSurfaceCapabilitiesKHR surfaceCapabilities;
-    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physical_device, options.surface, &surfaceCapabilities);
+    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device_get_vk_physical_device(device), options.surface, &surfaceCapabilities);
 
     u32 width = surfaceCapabilities.currentExtent.width;
     u32 height = surfaceCapabilities.currentExtent.height;
@@ -104,7 +104,7 @@ Swapchain* swapchain_new(VkDevice device, VkPhysicalDevice physical_device, Swap
       .oldSwapchain = options.oldSwapchain
     };
 
-    VkResult swapchain_create = vkCreateSwapchainKHR(device, &swapchain_info, NULL, &swapchain->swapchain);
+    VkResult swapchain_create = vkCreateSwapchainKHR(device_get_vk_device(device), &swapchain_info, NULL, &swapchain->swapchain);
     if (swapchain_create != VK_SUCCESS) {
       fprintf(stderr, "Failed to create vulkan swapchain! %d\n", swapchain_create);
       free(swapchain);
@@ -121,15 +121,15 @@ Swapchain* swapchain_new(VkDevice device, VkPhysicalDevice physical_device, Swap
     return swapchain;
 }
 
-void swapchain_free(VkDevice device, Swapchain* swapchain) {
+void swapchain_free(Device* device, Swapchain* swapchain) {
     swapchain_free_resources(device, swapchain);
     free(swapchain);
 }
 
-void swapchain_resize(VkDevice device, VkPhysicalDevice physical_device, Swapchain* swapchain) {
-    vkDeviceWaitIdle(device);
+void swapchain_resize(Device* device, Swapchain* swapchain) {
+    device_wait(device);
 
-    Swapchain* new_swapchain = swapchain_new(device, physical_device, (SwapchainOptions){
+    Swapchain* new_swapchain = swapchain_new(device, (SwapchainOptions){
         .oldSwapchain = swapchain->swapchain,
         .surface = swapchain->surface,
         .min_image_count = swapchain->min_image_count,
