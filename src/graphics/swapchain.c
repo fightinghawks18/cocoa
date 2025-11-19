@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-void swapchain_create_images(VkDevice device, Swapchain* swapchain) {
+static void swapchain_create_images(VkDevice device, Swapchain* swapchain) {
     u32 swapchain_image_count = 0;
     vkGetSwapchainImagesKHR(device, swapchain->swapchain, &swapchain_image_count, NULL);
     
@@ -42,6 +42,19 @@ void swapchain_create_images(VkDevice device, Swapchain* swapchain) {
         fprintf(stderr, "Failed to create vulkan image view for index %d! %d\n", i, image_view_create);
       }
     }
+}
+
+static void swapchain_free_images(VkDevice device, Swapchain* swapchain) {
+  for (u32 i = 0; i < swapchain->image_count; i++) {
+      vkDestroyImageView(device, swapchain->image_views[i], NULL);
+  }
+  free(swapchain->image_views);
+  free(swapchain->images);
+}
+
+static void swapchain_free_resources(VkDevice device, Swapchain* swapchain) {
+  swapchain_free_images(device, swapchain);
+  vkDestroySwapchainKHR(device, swapchain->swapchain, NULL);
 }
 
 Swapchain* swapchain_new(VkDevice device, VkPhysicalDevice physical_device, SwapchainOptions options) {
@@ -95,17 +108,11 @@ Swapchain* swapchain_new(VkDevice device, VkPhysicalDevice physical_device, Swap
 }
 
 void swapchain_free(VkDevice device, Swapchain* swapchain) {
-    for (u32 i = 0; i < swapchain->image_count; i++) {
-        vkDestroyImageView(device, swapchain->image_views[i], NULL);
-    }
-    free(swapchain->image_views);
-    free(swapchain->images);
-
-    vkDestroySwapchainKHR(device, swapchain->swapchain, NULL);
+    swapchain_free_resources(device, swapchain);
     free(swapchain);
 }
 
-Swapchain* swapchain_resize(VkDevice device, VkPhysicalDevice physical_device, Swapchain* swapchain) {
+void swapchain_resize(VkDevice device, VkPhysicalDevice physical_device, Swapchain* swapchain) {
     vkDeviceWaitIdle(device);
 
     Swapchain* new_swapchain = swapchain_new(device, physical_device, (SwapchainOptions){
@@ -117,9 +124,10 @@ Swapchain* swapchain_resize(VkDevice device, VkPhysicalDevice physical_device, S
     });
     if (new_swapchain == NULL) {
         fprintf(stderr, "Failed to create new swapchain!");
-        return NULL;
+        return;
     }
     
-    swapchain_free(device, swapchain);
-    return new_swapchain;
+    swapchain_free_resources(device, swapchain);
+    *swapchain = *new_swapchain;
+    free(new_swapchain);
 }

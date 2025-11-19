@@ -13,7 +13,12 @@
 				"CMAKE_C_EXTENSIONS": "OFF",
 
 				"CMAKE_C_COMPILER": "clang",
-				"CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+				"CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+
+				"CMAKE_C_FLAGS": "-Wall -Wextra -Wpedantic -Wshadow -Wunused -Wformat=2 -Wundef -Wmissing-prototypes -Wstrict-prototypes",
+        		"CMAKE_C_FLAGS_DEBUG": "-g -O0 -fno-omit-frame-pointer",
+        		"CMAKE_C_FLAGS_RELEASE": "-O3 -DNDEBUG",
+        		"CMAKE_C_FLAGS_RELWITHDEBINFO": "-g -O2 -DNDEBUG"
 			}
 		}
 	],

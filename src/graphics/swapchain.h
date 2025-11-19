@@ -28,6 +28,6 @@ typedef struct {
 
 Swapchain* swapchain_new(VkDevice device, VkPhysicalDevice physical_device, SwapchainOptions options);
 void swapchain_free(VkDevice device, Swapchain* swapchain);
-Swapchain* swapchain_resize(VkDevice device, VkPhysicalDevice physical_device, Swapchain* swapchain);
+void swapchain_resize(VkDevice device, VkPhysicalDevice physical_device, Swapchain* swapchain);
 
 #endif // SWAPCHAIN_H

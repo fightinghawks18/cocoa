@@ -1,4 +1,3 @@
-#include <math.h>
 #include <stdlib.h>
 
 #include <vulkan/vulkan.h>
@@ -6,6 +5,8 @@
 
 #include "game/game.h"
 #include "graphics/swapchain.h"
+#include "graphics/renderer.h"
+
 #include "int_types.h"
 
 #define MAX_FRAMES_IN_FLIGHT 2
@@ -242,258 +243,53 @@ int main() {
     .format = VK_FORMAT_B8G8R8A8_SRGB,
     .color_space = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR
   });
-  
-  VkCommandPool command_pool = NULL;
-  VkSemaphore image_available_semaphores[MAX_FRAMES_IN_FLIGHT];
-  VkSemaphore render_finished_semaphores[MAX_FRAMES_IN_FLIGHT];
-  VkFence fences[MAX_FRAMES_IN_FLIGHT];
-  VkCommandBuffer command_buffers[MAX_FRAMES_IN_FLIGHT];
 
-  VkCommandPoolCreateInfo command_pool_info = {
-    .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-    .pNext = NULL,
-    .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
-    .queueFamilyIndex = graphics_family
-  };
-
-  VkResult command_pool_create = vkCreateCommandPool(device, &command_pool_info, NULL, &command_pool);
-  if (command_pool_create != VK_SUCCESS) {
-    fprintf(stderr, "Failed to create vulkan command pool! %d\n", command_pool_create);
-    return -1;
-  }
-
-  for (u32 i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-    VkSemaphoreCreateInfo semaphore_create_info = {
-      .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
-      .pNext = NULL,
-      .flags = 0
-    };
-
-    VkResult image_available_semaphore_create = vkCreateSemaphore(device, &semaphore_create_info, NULL, &image_available_semaphores[i]);
-    if (image_available_semaphore_create != VK_SUCCESS) {
-      fprintf(stderr, "Failed to create vulkan image available semaphore for index %d! %d\n", i, image_available_semaphore_create);
-      return -1;
-    }
-
-    VkResult render_finished_semaphore_create = vkCreateSemaphore(device, &semaphore_create_info, NULL, &render_finished_semaphores[i]);
-    if (image_available_semaphore_create != VK_SUCCESS) {
-      fprintf(stderr, "Failed to create vulkan render finished semaphore for index %d! %d\n", i, render_finished_semaphore_create);
-      return -1;
-    }
-
-    VkFenceCreateInfo fence_info = {
-      .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
-      .pNext = NULL,
-      .flags = VK_FENCE_CREATE_SIGNALED_BIT
-    };
-
-    VkResult fence_create = vkCreateFence(device, &fence_info, NULL, &fences[i]);
-    if (fence_create != VK_SUCCESS) {
-      fprintf(stderr, "Failed to create vulkan fence for index %d! %d\n", i, fence_create);
-      return -1;
-    }
-
-    VkCommandBufferAllocateInfo command_buffer_info = {
-      .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-      .pNext = NULL,
-      .commandPool = command_pool,
-      .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-      .commandBufferCount = 1
-    };
-
-    VkResult command_buffer_create = vkAllocateCommandBuffers(device, &command_buffer_info, &command_buffers[i]);
-    if (command_buffer_create != VK_SUCCESS) {
-      fprintf(stderr, "Failed to create vulkan command buffer for index %d! %d\n", i, command_buffer_create);
-      return -1;
-    }
-  }
-
-  u32 frame_index = 0;
+  Renderer* renderer = renderer_new(device, graphics_family, MAX_FRAMES_IN_FLIGHT);
 
   while (game_is_alive(game)) {
     game_update(game);
 
-    {
-      VkResult wait_for_fence = vkWaitForFences(device, 1, &fences[frame_index], VK_TRUE, INFINITY);
-      if (wait_for_fence != VK_SUCCESS) {
-        fprintf(stderr, "Failed to wait on fence for index %d! %d\n", frame_index, wait_for_fence);
-        return -1;
-      }
-      
-      u32 next_image = UINT32_MAX;
-      u32 get_next_image = vkAcquireNextImageKHR(device, swapchain->swapchain, INFINITY, image_available_semaphores[frame_index], NULL, &next_image);
-      if (get_next_image == VK_SUBOPTIMAL_KHR || get_next_image == VK_ERROR_OUT_OF_DATE_KHR) {
-        printf("Resizing swapchain for index %d\n", frame_index);
-        swapchain = swapchain_resize(device, best_device, swapchain);
-        continue;
-      } else if (get_next_image != VK_SUCCESS) {
-        fprintf(stderr, "Failed to get next image for index %d! %d\n", frame_index, get_next_image);
-        return -1;
-      }
-
-      VkResult reset_fence = vkResetFences(device, 1, &fences[frame_index]);
-      if (reset_fence != VK_SUCCESS) {
-        fprintf(stderr, "Failed to reset fence for index %d! %d\n", frame_index, reset_fence);
-        return -1;
-      } 
-
-      VkCommandBufferBeginInfo command_buffer_begin_info = {
-        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-        .pNext = NULL,
-        .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
-        .pInheritanceInfo = NULL
-      };
-
-      VkResult command_buffer_begin = vkBeginCommandBuffer(command_buffers[frame_index], &command_buffer_begin_info);
-      if (command_buffer_begin != VK_SUCCESS) {
-        fprintf(stderr, "Failed to start command buffer for index %d! %d\n", frame_index, command_buffer_begin);
-        return -1;
-      }
-
-      VkRenderingAttachmentInfo rendering_attachment = {
-        .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-        .pNext = NULL,
-        .imageView = swapchain->image_views[next_image],
-        .imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-        .resolveMode = VK_RESOLVE_MODE_NONE,
-        .resolveImageView = NULL,
-        .resolveImageLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-        .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-        .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-        .clearValue = {
-          .color = {1, 1, 1, 1 }
-        }
-      };
-
-      VkRenderingInfo rendering_info = {
-        .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
-        .pNext = NULL,
-        .flags = 0,
-        .renderArea = {{0, 0}, swapchain->extent},
-        .layerCount = 1,
-        .viewMask = 0,
-        .colorAttachmentCount = 1,
-        .pColorAttachments = &rendering_attachment,
-        .pStencilAttachment = NULL,
-        .pDepthAttachment = NULL
-      };
-
-      VkImageMemoryBarrier2 undefined_to_color_barrier = {
-        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-        .srcStageMask = VK_PIPELINE_STAGE_2_NONE,
-        .srcAccessMask = VK_ACCESS_2_NONE,
-        .dstStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-        .dstAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
-        .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-        .newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .image = swapchain->images[next_image],
-        .subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-        .subresourceRange.baseMipLevel = 0,
-        .subresourceRange.levelCount = 1,
-        .subresourceRange.baseArrayLayer = 0,
-        .subresourceRange.layerCount = 1
-      };
-
-      VkDependencyInfo undefined_to_color = {
-        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-        .pNext = NULL,
-        .dependencyFlags = 0,
-        .imageMemoryBarrierCount = 1,
-        .pImageMemoryBarriers = &undefined_to_color_barrier,
-      };
-
-      vkCmdPipelineBarrier2(command_buffers[frame_index], &undefined_to_color);
-      
-      vkCmdBeginRendering(command_buffers[frame_index], &rendering_info);
-      vkCmdEndRendering(command_buffers[frame_index]);
-
-      VkImageMemoryBarrier2 color_to_present_barrier = {
-        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-        .srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-        .srcAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
-        .dstStageMask = VK_PIPELINE_STAGE_2_NONE,
-        .dstAccessMask = VK_ACCESS_2_NONE,
-        .oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-        .newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .image = swapchain->images[next_image],
-        .subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-        .subresourceRange.baseMipLevel = 0,
-        .subresourceRange.levelCount = 1,
-        .subresourceRange.baseArrayLayer = 0,
-        .subresourceRange.layerCount = 1
-      };
-
-      VkDependencyInfo color_to_present = {
-        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-        .pNext = NULL,
-        .dependencyFlags = 0,
-        .imageMemoryBarrierCount = 1,
-        .pImageMemoryBarriers = &color_to_present_barrier,
-      };
-
-      vkCmdPipelineBarrier2(command_buffers[frame_index], &color_to_present);
-
-
-      VkResult command_buffer_end = vkEndCommandBuffer(command_buffers[frame_index]);
-      if (command_buffer_end != VK_SUCCESS) {
-        fprintf(stderr, "Failed to end vulkan command buffer for index %d! %d\n", frame_index, command_buffer_end);
-        return -1;
-      }
-
-      VkPipelineStageFlags wait_stages = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
-
-      VkSubmitInfo submit_info = {
-        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-        .pNext = NULL,
-        .waitSemaphoreCount = 1,
-        .pWaitSemaphores = &image_available_semaphores[frame_index],
-        .pWaitDstStageMask = &wait_stages,
-        .commandBufferCount = 1,
-        .pCommandBuffers = &command_buffers[frame_index],
-        .signalSemaphoreCount = 1,
-        .pSignalSemaphores = &render_finished_semaphores[frame_index]
-      };
-
-      VkResult submit = vkQueueSubmit(graphics_queue, 1, &submit_info, fences[frame_index]);
-      if (submit != VK_SUCCESS) {
-        fprintf(stderr, "Failed to submit graphics for index %d! %d\n", frame_index, submit);
-        return -1;
-      }
-
-      VkPresentInfoKHR present_info = {
-        .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
-        .pNext = NULL,
-        .waitSemaphoreCount = 1,
-        .pWaitSemaphores = &render_finished_semaphores[frame_index],
-        .swapchainCount = 1,
-        .pSwapchains = &swapchain->swapchain,
-        .pImageIndices = &next_image,
-        .pResults = NULL
-      };
-
-      VkResult present = vkQueuePresentKHR(present_queue, &present_info);
-      if (get_next_image != VK_SUCCESS) {
-        fprintf(stderr, "Failed to present graphics for index %d! %d\n", frame_index, present);
-        return -1;
-      }
-      frame_index = (frame_index + 1) % MAX_FRAMES_IN_FLIGHT;
+    const Frame* frame = renderer_begin_rendering(device, best_device, renderer, swapchain);
+    if (frame == NULL) {
+      continue;
     }
+
+    VkRenderingAttachmentInfo rendering_attachment = {
+      .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+      .pNext = NULL,
+      .imageView = renderer->current_swapchain->image_views[renderer->current_image_index],
+      .imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+      .resolveMode = VK_RESOLVE_MODE_NONE,
+      .resolveImageView = NULL,
+      .resolveImageLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+      .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+      .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+      .clearValue = {
+        .color = {{1, 1, 1, 1} }
+      }
+    };
+
+    VkRenderingInfo rendering_info = {
+      .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
+      .pNext = NULL,
+      .flags = 0,
+      .renderArea = {{0, 0}, swapchain->extent},
+      .layerCount = 1,
+      .viewMask = 0,
+      .colorAttachmentCount = 1,
+      .pColorAttachments = &rendering_attachment,
+      .pStencilAttachment = NULL,
+      .pDepthAttachment = NULL
+    };
+
+    vkCmdBeginRendering(frame->cmd, &rendering_info);
+    vkCmdEndRendering(frame->cmd);
+    renderer_end_rendering(graphics_queue, present_queue, renderer);
   }
 
   vkDeviceWaitIdle(device);
 
-  for (u32 i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-    vkDestroySemaphore(device, image_available_semaphores[i], NULL);
-    vkDestroySemaphore(device, render_finished_semaphores[i], NULL);
-    vkDestroyFence(device, fences[i], NULL);
-  }
-  
-  vkDestroyCommandPool(device, command_pool, NULL);
-
+  renderer_free(device, renderer);
   swapchain_free(device, swapchain);
   vkDestroySurfaceKHR(instance, surface, NULL);
   vkDestroyDevice(device, NULL);
