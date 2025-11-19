@@ -11,6 +11,7 @@ find_package(Vulkan REQUIRED)
 add_executable(Cocoa
         src/main.c
         src/game/game.c
+        src/graphics/swapchain.c
 )
 
 target_link_libraries(Cocoa

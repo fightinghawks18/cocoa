@@ -5,7 +5,10 @@
 #include <SDL3/SDL_vulkan.h>
 
 #include "game/game.h"
+#include "graphics/swapchain.h"
 #include "int_types.h"
+
+#define MAX_FRAMES_IN_FLIGHT 2
 
 int main() {
   Game* game = game_new();
@@ -227,85 +230,24 @@ int main() {
     return -1;
   }
 
-  int w, h;
-  SDL_GetWindowSize(window, &w, &h);
-
-  u32 min_image_count = 2;
-  VkFormat swapchain_image_format = VK_FORMAT_B8G8R8A8_SRGB;
-  VkSwapchainCreateInfoKHR swapchain_info = {
-    .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
-    .pNext = NULL,
-    .flags = 0,
-    .surface = surface,
-    .minImageCount = min_image_count,
-    .imageFormat = swapchain_image_format,
-    .imageColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR,
-    .imageExtent = {w, h},
-    .imageArrayLayers = 1,
-    .imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-    .imageSharingMode = VK_SHARING_MODE_EXCLUSIVE,
-    .queueFamilyIndexCount = 0,
-    .pQueueFamilyIndices = NULL,
-    .preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR,
-    .compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
-    .presentMode = VK_PRESENT_MODE_FIFO_KHR,
-    .clipped = VK_TRUE,
-    .oldSwapchain = NULL
-  };
-
-  VkSwapchainKHR swapchain = NULL;
-  VkResult swapchain_create = vkCreateSwapchainKHR(device, &swapchain_info, NULL, &swapchain);
-  if (swapchain_create != VK_SUCCESS) {
-    fprintf(stderr, "Failed to create vulkan swapchain! %d\n", swapchain_create);
-    return -1;
-  }
-
   VkQueue graphics_queue = NULL;
   VkQueue present_queue = NULL;
   vkGetDeviceQueue(device, graphics_family, 0, &graphics_queue);
   vkGetDeviceQueue(device, present_family, 0, &present_queue);
 
-  u32 swapchain_image_count = 0;
-  vkGetSwapchainImagesKHR(device, swapchain, &swapchain_image_count, NULL);
-  VkImage swapchain_images[swapchain_image_count];
-  vkGetSwapchainImagesKHR(device, swapchain, &swapchain_image_count, swapchain_images);
-
-  VkImageView swapchain_image_views[min_image_count];
-  for (u32 i = 0; i < swapchain_image_count; i++) {
-    VkImageViewCreateInfo image_view_info = {
-      .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-      .pNext = NULL,
-      .flags = 0,
-      .image = swapchain_images[i],
-      .viewType = VK_IMAGE_VIEW_TYPE_2D,
-      .format = swapchain_image_format,
-      .components = {
-        .r = VK_COMPONENT_SWIZZLE_IDENTITY,
-        .b = VK_COMPONENT_SWIZZLE_IDENTITY,
-        .g = VK_COMPONENT_SWIZZLE_IDENTITY,
-        .a = VK_COMPONENT_SWIZZLE_IDENTITY,
-      },
-      .subresourceRange = {
-        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-        .baseMipLevel = 0,
-        .levelCount = 1,
-        .baseArrayLayer = 0,
-        .layerCount = 1,
-      }
-    };
-
-    VkResult image_view_create = vkCreateImageView(device, &image_view_info, NULL, &swapchain_image_views[i]);
-    if (image_view_create != VK_SUCCESS) {
-      fprintf(stderr, "Failed to create vulkan image view for index %d! %d\n", i, image_view_create);
-      return -1;
-    }
-  }
+  Swapchain* swapchain = swapchain_new(device, best_device, (SwapchainOptions){
+    .oldSwapchain = NULL,
+    .surface = surface,
+    .min_image_count = MAX_FRAMES_IN_FLIGHT,
+    .format = VK_FORMAT_B8G8R8A8_SRGB,
+    .color_space = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR
+  });
   
   VkCommandPool command_pool = NULL;
-  VkSemaphore image_available_semaphores[min_image_count];
-  VkSemaphore render_finished_semaphores[min_image_count];
-  VkFence fences[min_image_count];
-  VkCommandBuffer command_buffers[min_image_count];
+  VkSemaphore image_available_semaphores[MAX_FRAMES_IN_FLIGHT];
+  VkSemaphore render_finished_semaphores[MAX_FRAMES_IN_FLIGHT];
+  VkFence fences[MAX_FRAMES_IN_FLIGHT];
+  VkCommandBuffer command_buffers[MAX_FRAMES_IN_FLIGHT];
 
   VkCommandPoolCreateInfo command_pool_info = {
     .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
@@ -320,7 +262,7 @@ int main() {
     return -1;
   }
 
-  for (u32 i = 0; i < min_image_count; i++) {
+  for (u32 i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
     VkSemaphoreCreateInfo semaphore_create_info = {
       .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
       .pNext = NULL,
@@ -372,15 +314,28 @@ int main() {
     game_update(game);
 
     {
-      vkWaitForFences(device, 1, &fences[frame_index], VK_TRUE, INFINITY);
-      vkResetFences(device, 1, &fences[frame_index]);
+      VkResult wait_for_fence = vkWaitForFences(device, 1, &fences[frame_index], VK_TRUE, INFINITY);
+      if (wait_for_fence != VK_SUCCESS) {
+        fprintf(stderr, "Failed to wait on fence for index %d! %d\n", frame_index, wait_for_fence);
+        return -1;
+      }
       
       u32 next_image = UINT32_MAX;
-      u32 get_next_image = vkAcquireNextImageKHR(device, swapchain, INFINITY, image_available_semaphores[frame_index], NULL, &next_image);
-      if (get_next_image != VK_SUCCESS) {
+      u32 get_next_image = vkAcquireNextImageKHR(device, swapchain->swapchain, INFINITY, image_available_semaphores[frame_index], NULL, &next_image);
+      if (get_next_image == VK_SUBOPTIMAL_KHR || get_next_image == VK_ERROR_OUT_OF_DATE_KHR) {
+        printf("Resizing swapchain for index %d\n", frame_index);
+        swapchain = swapchain_resize(device, best_device, swapchain);
+        continue;
+      } else if (get_next_image != VK_SUCCESS) {
         fprintf(stderr, "Failed to get next image for index %d! %d\n", frame_index, get_next_image);
         return -1;
       }
+
+      VkResult reset_fence = vkResetFences(device, 1, &fences[frame_index]);
+      if (reset_fence != VK_SUCCESS) {
+        fprintf(stderr, "Failed to reset fence for index %d! %d\n", frame_index, reset_fence);
+        return -1;
+      } 
 
       VkCommandBufferBeginInfo command_buffer_begin_info = {
         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
@@ -398,7 +353,7 @@ int main() {
       VkRenderingAttachmentInfo rendering_attachment = {
         .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
         .pNext = NULL,
-        .imageView = swapchain_image_views[next_image],
+        .imageView = swapchain->image_views[next_image],
         .imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
         .resolveMode = VK_RESOLVE_MODE_NONE,
         .resolveImageView = NULL,
@@ -414,7 +369,7 @@ int main() {
         .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
         .pNext = NULL,
         .flags = 0,
-        .renderArea = {{0, 0}, {w, h}},
+        .renderArea = {{0, 0}, swapchain->extent},
         .layerCount = 1,
         .viewMask = 0,
         .colorAttachmentCount = 1,
@@ -433,7 +388,7 @@ int main() {
         .newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
         .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
         .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .image = swapchain_images[next_image],
+        .image = swapchain->images[next_image],
         .subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
         .subresourceRange.baseMipLevel = 0,
         .subresourceRange.levelCount = 1,
@@ -464,7 +419,7 @@ int main() {
         .newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
         .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
         .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .image = swapchain_images[next_image],
+        .image = swapchain->images[next_image],
         .subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
         .subresourceRange.baseMipLevel = 0,
         .subresourceRange.levelCount = 1,
@@ -515,7 +470,7 @@ int main() {
         .waitSemaphoreCount = 1,
         .pWaitSemaphores = &render_finished_semaphores[frame_index],
         .swapchainCount = 1,
-        .pSwapchains = &swapchain,
+        .pSwapchains = &swapchain->swapchain,
         .pImageIndices = &next_image,
         .pResults = NULL
       };
@@ -525,13 +480,13 @@ int main() {
         fprintf(stderr, "Failed to present graphics for index %d! %d\n", frame_index, present);
         return -1;
       }
-      frame_index = (frame_index + 1) % min_image_count;
+      frame_index = (frame_index + 1) % MAX_FRAMES_IN_FLIGHT;
     }
   }
 
   vkDeviceWaitIdle(device);
 
-  for (u32 i = 0; i < min_image_count; i++) {
+  for (u32 i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
     vkDestroySemaphore(device, image_available_semaphores[i], NULL);
     vkDestroySemaphore(device, render_finished_semaphores[i], NULL);
     vkDestroyFence(device, fences[i], NULL);
@@ -539,11 +494,7 @@ int main() {
   
   vkDestroyCommandPool(device, command_pool, NULL);
 
-  for (u32 i = 0; i < swapchain_image_count; i++) {
-    vkDestroyImageView(device, swapchain_image_views[i], NULL);
-  }
-
-  vkDestroySwapchainKHR(device, swapchain, NULL);
+  swapchain_free(device, swapchain);
   vkDestroySurfaceKHR(instance, surface, NULL);
   vkDestroyDevice(device, NULL);
   vkDestroyInstance(instance, NULL);
