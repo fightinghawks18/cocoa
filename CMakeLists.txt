@@ -14,6 +14,9 @@ add_executable(Cocoa
         src/graphics/swapchain.c
         src/graphics/renderer.c
         src/graphics/device.c
+        src/graphics/formats.c
+        src/graphics/pipeline.c
+        src/graphics/shader.c
 )
 
 target_link_libraries(Cocoa

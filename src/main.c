@@ -1,6 +1,5 @@
-#include <stdlib.h>
+#include <stdio.h>
 
-#include <vulkan/vulkan.h>
 #include <SDL3/SDL_vulkan.h>
 
 #include "game/game.h"
