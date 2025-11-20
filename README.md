@@ -5,9 +5,6 @@
 * Cocoa uses C to squeeze as much performance as possible whilst
 being simple to understand.
 
-### Does this have any relevance to the Apple API by the same name?
-* **This project was not named after Apple's proprietary api, it was named after my *frenchton***
-
 ### Why *C*?
 At first I tried to understand game engine development through C++, 
 and the obvious answer is that C++ is a super reliable choice for game development
