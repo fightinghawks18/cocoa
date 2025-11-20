@@ -165,9 +165,18 @@ Device* device_new() {
   
     const char* device_extensions[] = {
       "VK_KHR_swapchain",
+      #ifdef __APPLE__
+        "VK_KHR_portability_subset",
+      #endif
+      "VK_KHR_buffer_device_address",
+      "VK_KHR_push_descriptor",
+      "VK_KHR_maintenance1",
+      "VK_KHR_maintenance2",
+      "VK_KHR_maintenance3",
+      "VK_EXT_descriptor_indexing",
+      "VK_EXT_shader_viewport_index_layer",
       "VK_EXT_extended_dynamic_state",
-      "VK_EXT_extended_dynamic_state2",
-      "VK_EXT_extended_dynamic_state3"
+      "VK_EXT_extended_dynamic_state2"
     };
     const char* device_layers[] = {};
   
@@ -183,20 +192,11 @@ Device* device_new() {
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_2_FEATURES_EXT,
       .pNext = &extended_dynamic_state_features,
       .extendedDynamicState2 = VK_TRUE,
-      .extendedDynamicState2LogicOp = VK_TRUE,
-      .extendedDynamicState2PatchControlPoints = VK_TRUE
-    };
-
-    VkPhysicalDeviceExtendedDynamicState3FeaturesEXT extended_dynamic_state3_features = {
-      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_3_FEATURES_EXT,
-      .pNext = &extended_dynamic_state2_features,
-      .extendedDynamicState3PolygonMode = VK_TRUE,
-      .extendedDynamicState3TessellationDomainOrigin = VK_TRUE
     };
   
     VkPhysicalDeviceVulkan13Features physical_device_vulkan_13_features = {
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
-      .pNext = &extended_dynamic_state3_features,
+      .pNext = &extended_dynamic_state2_features,
       .dynamicRendering = VK_TRUE,
       .synchronization2 = VK_TRUE
     };

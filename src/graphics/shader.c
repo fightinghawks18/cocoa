@@ -15,8 +15,8 @@ typedef struct {
 } ShaderSource;
 
 static bool shader_read_shader_file(const char* path, ShaderSource* out_source) {
-    FILE* file = NULL;
-    if (fopen_s(&file, path, "r") != 0 || file == NULL) {
+    FILE* file = fopen(path, "r");
+    if (file == NULL) {
         fprintf(stderr, "Failed to open a valid shader file at %s!\n", path);
         return false;
     }
@@ -118,4 +118,8 @@ void shader_free(Device* device, Shader* shader) {
 
 VkShaderModule shader_get_vk_module(Shader* shader) {
     return shader->module;
+}
+
+ShaderType shader_get_type(Shader* shader) {
+    return shader->type;
 }

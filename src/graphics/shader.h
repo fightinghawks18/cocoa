@@ -19,5 +19,6 @@ Shader* shader_from_code(Device* device, ShaderOptions options);
 void shader_free(Device* device, Shader* shader);
 
 VkShaderModule shader_get_vk_module(Shader* shader);
+ShaderType shader_get_type(Shader* shader);
 
 #endif // SHADER_H
