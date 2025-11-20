@@ -16,6 +16,7 @@ add_executable(Cocoa
         src/graphics/device.c
         src/graphics/formats.c
         src/graphics/pipeline.c
+        src/graphics/pipeline_layout.c
         src/graphics/shader.c
 )
 

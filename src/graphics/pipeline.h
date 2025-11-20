@@ -3,6 +3,7 @@
 
 #include "device.h"
 #include "shader.h"
+#include "pipeline_layout.h"
 #include "formats.h"
 #include "../int_types.h"
 
@@ -221,6 +222,7 @@ typedef struct {
     PipelineMultisampleOptions multisampling;
     PipelineDepthStencilOptions depth_stencil;
     PipelineColorBlendOptions color_blending;
+    PipelineLayout* layout;
 } PipelineOptions;
 
 typedef struct Pipeline Pipeline;

@@ -288,7 +288,7 @@ static VkPipeline pipeline_build(Device* device, PipelineOptions options) {
         .pDepthStencilState = &depth_stencil_info,
         .pColorBlendState = &color_blend_info,
         .pDynamicState = &dynamic_state_info,
-        .layout = NULL,
+        .layout = pipeline_layout_get_vk_layout(options.layout),
         .renderPass = NULL,
         .subpass = 0,
         .basePipelineHandle = NULL,
