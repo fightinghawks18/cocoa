@@ -18,6 +18,7 @@ add_executable(Cocoa
         src/graphics/pipeline.c
         src/graphics/pipeline_layout.c
         src/graphics/shader.c
+        src/graphics/buffer.c
 )
 
 target_link_libraries(Cocoa
@@ -33,11 +34,18 @@ if(APPLE)
    )
 endif()
 
+add_custom_target(copy_content_to_binary ALL
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+                ${CMAKE_SOURCE_DIR}/content
+                ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/$<CONFIG>/content
+        COMMENT "Copying content from ${CMAKE_SOURCE_DIR}/content to ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/$<CONFIG>"
+)
+
 if(CMAKE_EXPORT_COMPILE_COMMANDS)
    add_custom_target(copy_compiled_commands ALL
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        ${CMAKE_CURRENT_BINARY_DIR}/compile_commands.json
-        ${CMAKE_CURRENT_BINARY_DIR}/../
+                ${CMAKE_CURRENT_BINARY_DIR}/compile_commands.json
+                ${CMAKE_CURRENT_BINARY_DIR}/../
         COMMENT "Copying compiled commands to ${CMAKE_CURRENT_BINARY_DIR}/../"
    )
 endif()
