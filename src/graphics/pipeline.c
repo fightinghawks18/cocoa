@@ -17,7 +17,8 @@ static VkVertexInputRate input_rate_to_vk[] = {
 };
 
 static VkPrimitiveTopology topology_to_vk[] = {
-    [TOPOLOGY_TRIANGLE_STRIP] = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP
+    [TOPOLOGY_TRIANGLE_STRIP] = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP,
+    [TOPOLOGY_TRIANGLE_LIST] = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST
 };
 
 static VkPolygonMode polygon_mode_to_vk[] = {
@@ -125,7 +126,7 @@ static VkSampleCountFlags sample_count_to_vk(PipelineSamplingFlags sampling_flag
 }
 
 static VkPipeline pipeline_build(Device* device, PipelineOptions options) {
-    VkPipelineShaderStageCreateInfo* stages = calloc(options.shader_stages.shader_count, sizeof(VkPipelineShaderStageCreateInfo));
+    VkPipelineShaderStageCreateInfo stages[options.shader_stages.shader_count];
     for (u32 i = 0; i < options.shader_stages.shader_count; i++) {
         Shader* shader = options.shader_stages.shaders[i];
         stages[i].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -134,6 +135,7 @@ static VkPipeline pipeline_build(Device* device, PipelineOptions options) {
         stages[i].stage = shader_stage_to_vk[shader_get_type(shader)];
         stages[i].module = shader_get_vk_module(shader);
         stages[i].pName = "main";
+        stages[i].pSpecializationInfo = NULL;
     }
 
     VkVertexInputBindingDescription bindings[options.vertex_input.binding_count];
@@ -149,7 +151,7 @@ static VkPipeline pipeline_build(Device* device, PipelineOptions options) {
     for (u32 i = 0; i < options.vertex_input.attribute_count; i++) {
         PipelineInputAttribute attribute = options.vertex_input.attributes[i];
         attributes[i].binding = attribute.binding;
-        attributes[i].format = color_format_to_vk(attribute.format);
+        attributes[i].format = vertex_format_to_vk(attribute.format);
         attributes[i].location = attribute.location;
         attributes[i].offset = attribute.offset;
     }
@@ -261,8 +263,19 @@ static VkPipeline pipeline_build(Device* device, PipelineOptions options) {
         .blendConstants = {0, 0, 0, 0}
     };
 
+    VkPipelineViewportStateCreateInfo viewport_info = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+        .pNext = NULL,
+        .flags = 0,
+        .viewportCount = 1,
+        .pViewports = NULL,
+        .scissorCount = 1,
+        .pScissors = NULL
+    };
+
     VkDynamicState dynamic_states[] = {
-        VK_DYNAMIC_STATE_VIEWPORT
+        VK_DYNAMIC_STATE_VIEWPORT,
+        VK_DYNAMIC_STATE_SCISSOR
     };
 
     VkPipelineDynamicStateCreateInfo dynamic_state_info = {
@@ -273,16 +286,31 @@ static VkPipeline pipeline_build(Device* device, PipelineOptions options) {
         .pDynamicStates = dynamic_states
     };
 
+    VkFormat color_formats[options.rendering.color_count];
+    for (u32 i = 0; i < options.rendering.color_count; i++) {
+        color_formats[i] = color_format_to_vk(options.rendering.colors[i]);
+    }
+
+    VkPipelineRenderingCreateInfo pipeline_rendering_info = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+        .pNext = NULL,
+        .viewMask = 0,
+        .colorAttachmentCount = options.rendering.color_count,
+        .pColorAttachmentFormats = color_formats,
+        .depthAttachmentFormat = depth_format_to_vk(options.rendering.depth),
+        .stencilAttachmentFormat = depth_format_to_vk(options.rendering.stencil)
+    };
+
     VkGraphicsPipelineCreateInfo graphics_pipeline_info = {
         .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-        .pNext = NULL,
+        .pNext = &pipeline_rendering_info,
         .flags = 0,
-        .stageCount = 0,
-        .pStages = NULL,
+        .stageCount = options.shader_stages.shader_count,
+        .pStages = stages,
         .pVertexInputState = &vertex_input_info,
         .pInputAssemblyState = &input_assembly_info,
         .pTessellationState = NULL,
-        .pViewportState = NULL,
+        .pViewportState = &viewport_info,
         .pRasterizationState = &rasterization_info,
         .pMultisampleState = &multisample_info,
         .pDepthStencilState = &depth_stencil_info,

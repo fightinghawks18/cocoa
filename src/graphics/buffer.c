@@ -99,6 +99,18 @@ Buffer* buffer_new(Device* device, BufferOptions options) {
         buffer_free(device, buffer);
         return NULL;
     }
+
+    VkResult bind_buffer_to_memory = vkBindBufferMemory(
+        device_get_vk_device(device), 
+        buffer->buffer, 
+        buffer->memory, 
+        0
+    );
+    if (bind_buffer_to_memory != VK_SUCCESS) {
+        fprintf(stderr, "Failed to bind vulkan buffer memory! %d\n", create_buffer);
+        buffer_free(device, buffer);
+        return NULL;
+    }
     return buffer;
 }
 

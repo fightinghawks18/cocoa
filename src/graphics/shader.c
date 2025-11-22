@@ -3,7 +3,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <vulkan/vulkan.h>
-
 typedef struct Shader {
     VkShaderModule module;
     ShaderType type;
@@ -62,6 +61,7 @@ Shader* shader_from_file(Device* device, ShaderOptions options) {
     ShaderSource shader_source;
     bool shader_file_read = shader_read_shader_file(options.shader, &shader_source);
     if (!shader_file_read) {
+        fprintf(stderr, "Failed to read shader file to source!\n");
         shader_free(device, shader);
         return NULL;
     }

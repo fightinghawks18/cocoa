@@ -9,6 +9,8 @@ typedef enum {
 } ShaderType;
 typedef struct {
     const char* shader;
+    const char* name;
+    const char* entry_point;
     ShaderType type;
 } ShaderOptions;
 

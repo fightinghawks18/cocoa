@@ -10,7 +10,8 @@ typedef struct Swapchain {
     VkImageView* image_views;
     
     VkExtent2D extent;
-    VkFormat format;
+    VkFormat vk_color_format;
+    ColorFormat color_format;
     VkColorSpaceKHR color_space;
     
     u32 min_image_count;
@@ -35,7 +36,7 @@ static void swapchain_create_images(Device* device, Swapchain* swapchain) {
         .flags = 0,
         .image = swapchain->images[i],
         .viewType = VK_IMAGE_VIEW_TYPE_2D,
-        .format = swapchain->format,
+        .format = swapchain->vk_color_format,
         .components = {
           .r = VK_COMPONENT_SWIZZLE_IDENTITY,
           .b = VK_COMPONENT_SWIZZLE_IDENTITY,
@@ -89,7 +90,7 @@ Swapchain* swapchain_new(Device* device, SwapchainOptions options) {
       .flags = 0,
       .surface = options.surface,
       .minImageCount = options.min_image_count,
-      .imageFormat = options.format,
+      .imageFormat = color_format_to_vk(options.format),
       .imageColorSpace = options.color_space,
       .imageExtent = {width, height},
       .imageArrayLayers = 1,
@@ -112,7 +113,8 @@ Swapchain* swapchain_new(Device* device, SwapchainOptions options) {
     }
 
     swapchain->surface = options.surface;
-    swapchain->format = options.format;
+    swapchain->vk_color_format = color_format_to_vk(options.format);
+    swapchain->color_format = options.format;
     swapchain->color_space = options.color_space;
     swapchain->min_image_count = options.min_image_count;
     swapchain->extent = swapchain_info.imageExtent;
@@ -133,7 +135,7 @@ void swapchain_resize(Device* device, Swapchain* swapchain) {
         .oldSwapchain = swapchain->swapchain,
         .surface = swapchain->surface,
         .min_image_count = swapchain->min_image_count,
-        .format = swapchain->format,
+        .format = swapchain->color_format,
         .color_space = swapchain->color_space
     });
     if (new_swapchain == NULL) {
@@ -166,8 +168,12 @@ VkExtent2D swapchain_get_extent(Swapchain* swapchain) {
   return swapchain->extent;
 }
 
-VkFormat swapchain_get_format(Swapchain* swapchain) {
-  return swapchain->format;
+VkFormat swapchain_get_vk_color_format(Swapchain* swapchain) {
+  return swapchain->vk_color_format;
+}
+
+ColorFormat swapchain_get_color_format(Swapchain* swapchain) {
+  return swapchain->color_format;
 }
 
 VkColorSpaceKHR swapchain_get_color_space(Swapchain* swapchain) {

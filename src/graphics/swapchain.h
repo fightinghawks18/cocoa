@@ -3,12 +3,13 @@
 
 #include "../int_types.h"
 #include "device.h"
+#include "formats.h"
 
 typedef struct {
     VkSwapchainKHR oldSwapchain;
     VkSurfaceKHR surface;
     u32 min_image_count;
-    VkFormat format;
+    ColorFormat format;
     VkColorSpaceKHR color_space;
 } SwapchainOptions;
 
@@ -23,7 +24,8 @@ VkSurfaceKHR swapchain_get_vk_surface(Swapchain* swapchain);
 VkImage* swapchain_get_vk_images(Swapchain* swapchain);
 VkImageView* swapchain_get_vk_image_views(Swapchain* swapchain);
 VkExtent2D swapchain_get_extent(Swapchain* swapchain);
-VkFormat swapchain_get_format(Swapchain* swapchain);
+VkFormat swapchain_get_vk_color_format(Swapchain* swapchain);
+ColorFormat swapchain_get_color_format(Swapchain* swapchain);
 VkColorSpaceKHR swapchain_get_color_space(Swapchain* swapchain);
 u32 swapchain_get_image_count(Swapchain* swapchain);
 

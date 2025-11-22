@@ -21,7 +21,7 @@ typedef struct {
 typedef struct {
     u32 location;
     u32 binding;
-    ColorFormat format;
+    VertexFormat format;
     u32 offset;
 } PipelineInputAttribute;
 
@@ -38,7 +38,8 @@ typedef struct {
 } PipelineShaderOptions;
 
 typedef enum PipelinePrimitive {
-    TOPOLOGY_TRIANGLE_STRIP
+    TOPOLOGY_TRIANGLE_STRIP,
+    TOPOLOGY_TRIANGLE_LIST
 } PipelineTopology;
 
 typedef struct {
@@ -63,6 +64,14 @@ typedef enum PipelineFrontFace {
     FRONT_FACING_C_CLOCKWISE,
     FRONT_FACING_CLOCKWISE
 } PipelineFrontFaceDirection;
+
+typedef struct {
+    ColorFormat* colors;
+    DepthFormat depth;
+    DepthFormat stencil;
+
+    u32 color_count;
+} PipelineRenderingOptions;
 
 typedef struct {
     bool depth_clamping;
@@ -222,6 +231,7 @@ typedef struct {
     PipelineMultisampleOptions multisampling;
     PipelineDepthStencilOptions depth_stencil;
     PipelineColorBlendOptions color_blending;
+    PipelineRenderingOptions rendering;
     PipelineLayout* layout;
 } PipelineOptions;
 
