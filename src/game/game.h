@@ -6,7 +6,7 @@
 
 typedef struct Game Game;
 
-Game* game_new(void);
+void game_new(Game** out_game);
 bool game_start(Game* game);
 void game_update(Game* game);
 bool game_is_alive(Game* game);

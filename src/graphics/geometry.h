@@ -16,7 +16,7 @@ typedef struct {
     u32 index_count;
 } Geometry;
 
-Geometry* geometry_new(u32 vertex_count, u32 index_count);
+void geometry_new(u32 vertex_count, u32 index_count, Geometry** out_geometry);
 void geometry_free(Geometry* geometry);
 
 void geometry_set_vertex(Geometry* geometry, Vertex vertex, u32 vertex_slot);

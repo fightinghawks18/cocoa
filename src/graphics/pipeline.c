@@ -1,6 +1,7 @@
 #include "pipeline.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <vulkan/vulkan.h>
 
 typedef struct Pipeline {
     VkPipeline pipeline;
@@ -126,14 +127,24 @@ static VkSampleCountFlags sample_count_to_vk(PipelineSamplingFlags sampling_flag
 }
 
 static VkPipeline pipeline_build(Device* device, PipelineOptions options) {
+    void* device_handle = NULL;
+    device_get_device(device, &device_handle);
+
     VkPipelineShaderStageCreateInfo stages[options.shader_stages.shader_count];
     for (u32 i = 0; i < options.shader_stages.shader_count; i++) {
         Shader* shader = options.shader_stages.shaders[i];
+
+        ShaderType type;
+        shader_get_type(shader, &type);
+
+        void* module = NULL;
+        shader_get_module(shader, &module);
+
         stages[i].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
         stages[i].pNext = NULL;
         stages[i].flags = 0;
-        stages[i].stage = shader_stage_to_vk[shader_get_type(shader)];
-        stages[i].module = shader_get_vk_module(shader);
+        stages[i].stage = shader_stage_to_vk[type];
+        stages[i].module = module;
         stages[i].pName = "main";
         stages[i].pSpecializationInfo = NULL;
     }
@@ -150,8 +161,11 @@ static VkPipeline pipeline_build(Device* device, PipelineOptions options) {
 
     for (u32 i = 0; i < options.vertex_input.attribute_count; i++) {
         PipelineInputAttribute attribute = options.vertex_input.attributes[i];
+        int vertex_format = 0;
+        vertex_format_to_vk(attribute.format, &vertex_format);
+
         attributes[i].binding = attribute.binding;
-        attributes[i].format = vertex_format_to_vk(attribute.format);
+        attributes[i].format = vertex_format;
         attributes[i].location = attribute.location;
         attributes[i].offset = attribute.offset;
     }
@@ -288,8 +302,16 @@ static VkPipeline pipeline_build(Device* device, PipelineOptions options) {
 
     VkFormat color_formats[options.rendering.color_count];
     for (u32 i = 0; i < options.rendering.color_count; i++) {
-        color_formats[i] = color_format_to_vk(options.rendering.colors[i]);
+        int color_format = 0;
+        color_format_to_vk(options.rendering.colors[i], &color_format);
+        color_formats[i] = color_format;
     }
+
+    int depth_format = 0;
+    depth_format_to_vk(options.rendering.depth, &depth_format);
+
+    int stencil_format = 0;
+    depth_format_to_vk(options.rendering.stencil, &stencil_format);
 
     VkPipelineRenderingCreateInfo pipeline_rendering_info = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
@@ -297,9 +319,12 @@ static VkPipeline pipeline_build(Device* device, PipelineOptions options) {
         .viewMask = 0,
         .colorAttachmentCount = options.rendering.color_count,
         .pColorAttachmentFormats = color_formats,
-        .depthAttachmentFormat = depth_format_to_vk(options.rendering.depth),
-        .stencilAttachmentFormat = depth_format_to_vk(options.rendering.stencil)
+        .depthAttachmentFormat = depth_format,
+        .stencilAttachmentFormat = stencil_format
     };
+
+    void* layout = NULL;
+    pipeline_layout_get_layout(options.layout, &layout);
 
     VkGraphicsPipelineCreateInfo graphics_pipeline_info = {
         .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
@@ -316,7 +341,7 @@ static VkPipeline pipeline_build(Device* device, PipelineOptions options) {
         .pDepthStencilState = &depth_stencil_info,
         .pColorBlendState = &color_blend_info,
         .pDynamicState = &dynamic_state_info,
-        .layout = pipeline_layout_get_vk_layout(options.layout),
+        .layout = layout,
         .renderPass = NULL,
         .subpass = 0,
         .basePipelineHandle = NULL,
@@ -325,7 +350,7 @@ static VkPipeline pipeline_build(Device* device, PipelineOptions options) {
 
     VkPipeline pipeline = NULL;
     VkResult create_graphics_pipeline = vkCreateGraphicsPipelines(
-        device_get_vk_device(device), 
+        device_handle, 
         NULL, 
         1, 
         &graphics_pipeline_info, 
@@ -334,34 +359,38 @@ static VkPipeline pipeline_build(Device* device, PipelineOptions options) {
     );
     if (create_graphics_pipeline != VK_SUCCESS) {
         fprintf(stderr, "Failed to create a vulkan graphics pipeline! %d\n", create_graphics_pipeline);
-        vkDestroyPipeline(device_get_vk_device(device), pipeline, NULL);
+        vkDestroyPipeline(device_handle, pipeline, NULL);
         return NULL;
     }
     return pipeline;
 }
 
-Pipeline* pipeline_new(Device* device, PipelineOptions options) {
+PipelineResult pipeline_new(Device* device, PipelineOptions options, Pipeline** out_pipeline) {
     Pipeline* pipeline = malloc(sizeof(Pipeline));
     pipeline->pipeline = NULL;
 
     VkPipeline pip = pipeline_build(device, options);
     if (pip == NULL) {
         pipeline_free(device, pipeline);
-        return NULL;
+        return PIPELINE_ERROR_CREATE_HANDLE_FAIL;
     }
     pipeline->pipeline = pip;
     
-    return pipeline;
+    *out_pipeline = pipeline;
+    return PIPELINE_OK;
 }
 
 void pipeline_free(Device* device, Pipeline* pipeline) {
+    void* device_handle = NULL;
+    device_get_device(device, &device_handle);
+
     if (pipeline->pipeline) {
-        vkDestroyPipeline(device_get_vk_device(device), pipeline->pipeline, NULL);
+        vkDestroyPipeline(device_handle, pipeline->pipeline, NULL);
     }
     free(pipeline);
 }
 
 
-VkPipeline pipeline_get_vk_pipeline(Pipeline* pipeline) {
-    return pipeline->pipeline;
+void pipeline_get_pipeline(Pipeline* pipeline, void** out_pipeline) {
+    *out_pipeline = pipeline->pipeline;
 }

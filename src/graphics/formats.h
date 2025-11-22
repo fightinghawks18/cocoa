@@ -1,8 +1,6 @@
 #ifndef FORMATS_H
 #define FORMATS_H
 
-#include <vulkan/vulkan.h>
-
 typedef enum ColorTypes {
     COLOR_RGBA_UNDEFINED,
     COLOR_RGBA8_UNORM,
@@ -36,8 +34,8 @@ typedef enum DepthTypes {
     DEPTH32_SFLOAT_STENCIL8_UINT
 } DepthFormat;
 
-VkFormat color_format_to_vk(ColorFormat format);
-VkFormat depth_format_to_vk(DepthFormat format);
-VkFormat vertex_format_to_vk(VertexFormat format);
+void color_format_to_vk(ColorFormat format, int* vk_format);
+void depth_format_to_vk(DepthFormat format, int* vk_format);
+void vertex_format_to_vk(VertexFormat format, int* vk_format);
 
 #endif // FORMATS_H

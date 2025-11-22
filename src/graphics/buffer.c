@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <vulkan/vulkan.h>
 
 typedef struct Buffer {
     VkBuffer buffer;
@@ -43,8 +44,11 @@ static VkBufferUsageFlags buffer_usage_to_vk(BufferUsage usage) {
 }
 
 static u32 find_memory_type(Device* device, u32 type_filter, VkMemoryPropertyFlags properties) {
+    void* physical_device = NULL;
+    device_get_physical_device(device, &physical_device);
+
     VkPhysicalDeviceMemoryProperties memory_properties;
-    vkGetPhysicalDeviceMemoryProperties(device_get_vk_physical_device(device), &memory_properties);
+    vkGetPhysicalDeviceMemoryProperties(physical_device, &memory_properties);
 
     for (u32 i = 0; i < memory_properties.memoryTypeCount; i++) {
         if (type_filter & (1 << i) && memory_properties.memoryTypes[i].propertyFlags & properties) {
@@ -55,7 +59,10 @@ static u32 find_memory_type(Device* device, u32 type_filter, VkMemoryPropertyFla
     return UINT32_MAX;
 }
 
-Buffer* buffer_new(Device* device, BufferOptions options) {
+BufferResult buffer_new(Device* device, BufferOptions options, Buffer** out_buffer) {
+    void* device_handle = NULL;
+    device_get_device(device, &device_handle);
+
     Buffer* buffer = malloc(sizeof(Buffer));
     buffer->buffer = NULL;
     buffer->mapped = NULL;
@@ -73,7 +80,7 @@ Buffer* buffer_new(Device* device, BufferOptions options) {
     };
 
     VkResult create_buffer = vkCreateBuffer(
-        device_get_vk_device(device), 
+        device_handle, 
         &buffer_info, 
         NULL, 
         &buffer->buffer
@@ -81,11 +88,11 @@ Buffer* buffer_new(Device* device, BufferOptions options) {
     if (create_buffer != VK_SUCCESS) {
         fprintf(stderr, "Failed to create vulkan buffer! %d\n", create_buffer);
         buffer_free(device, buffer);
-        return NULL;
+        return BUFFER_ERROR_CREATE_HANDLE_FAIL;
     }
 
     VkMemoryRequirements mem_requirements;
-    vkGetBufferMemoryRequirements(device_get_vk_device(device), buffer->buffer, &mem_requirements);
+    vkGetBufferMemoryRequirements(device_handle, buffer->buffer, &mem_requirements);
 
     VkMemoryAllocateInfo memory_info = {
         .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
@@ -93,15 +100,15 @@ Buffer* buffer_new(Device* device, BufferOptions options) {
         .allocationSize = options.size,
         .memoryTypeIndex = find_memory_type(device, mem_requirements.memoryTypeBits, memory_mode_to_vk[options.memory_access])
     };
-    VkResult create_memory = vkAllocateMemory(device_get_vk_device(device), &memory_info, NULL, &buffer->memory);
+    VkResult create_memory = vkAllocateMemory(device_handle, &memory_info, NULL, &buffer->memory);
     if (create_memory != VK_SUCCESS) {
         fprintf(stderr, "Failed to create vulkan buffer memory! %d\n", create_buffer);
         buffer_free(device, buffer);
-        return NULL;
+        return BUFFER_ERROR_MEM_ALLOC_FAIL;
     }
 
     VkResult bind_buffer_to_memory = vkBindBufferMemory(
-        device_get_vk_device(device), 
+        device_handle, 
         buffer->buffer, 
         buffer->memory, 
         0
@@ -109,19 +116,28 @@ Buffer* buffer_new(Device* device, BufferOptions options) {
     if (bind_buffer_to_memory != VK_SUCCESS) {
         fprintf(stderr, "Failed to bind vulkan buffer memory! %d\n", create_buffer);
         buffer_free(device, buffer);
-        return NULL;
+        return BUFFER_ERROR_BIND_TO_MEM_FAIL;
     }
-    return buffer;
+
+    if (options.initial_data != NULL) {
+        buffer_map(device, buffer, options.size, options.initial_data);
+    }
+
+    *out_buffer = buffer;
+    return BUFFER_OK;
 }
 
 void buffer_free(Device* device, Buffer* buffer) {
+    void* device_handle = NULL;
+    device_get_device(device, &device_handle);
+
     if (buffer->buffer) {
-        vkDestroyBuffer(device_get_vk_device(device), buffer->buffer, NULL);
+        vkDestroyBuffer(device_handle, buffer->buffer, NULL);
         buffer->buffer = NULL;
     }
 
     if (buffer->memory) {
-        vkFreeMemory(device_get_vk_device(device), buffer->memory, NULL);
+        vkFreeMemory(device_handle, buffer->memory, NULL);
         buffer->memory = NULL;
     }
 
@@ -130,11 +146,14 @@ void buffer_free(Device* device, Buffer* buffer) {
 }
 
 void buffer_map(Device* device, Buffer* buffer, u64 size, void* data) {
-    vkMapMemory(device_get_vk_device(device), buffer->memory, 0, size, 0, &buffer->mapped);
+    void* device_handle = NULL;
+    device_get_device(device, &device_handle);
+
+    vkMapMemory(device_handle, buffer->memory, 0, size, 0, &buffer->mapped);
     memcpy(buffer->mapped, data, size);
-    vkUnmapMemory(device_get_vk_device(device), buffer->memory);
+    vkUnmapMemory(device_handle, buffer->memory);
 }
 
-VkBuffer buffer_get_vk_buffer(Buffer* buffer) {
-    return buffer->buffer;
+void buffer_get_buffer(Buffer* buffer, void** out_buffer) {
+    *out_buffer = buffer->buffer;
 }

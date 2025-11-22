@@ -1,6 +1,7 @@
 #include "device.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <vulkan/vulkan.h>
 
 #include <SDL3/SDL_vulkan.h>
 
@@ -14,7 +15,7 @@ typedef struct Device {
     VkQueue graphics_queue;
 } Device;
 
-Device* device_new() {
+DeviceResult device_new(Device** out_device) {
     Device* device = malloc(sizeof(Device));
     device->device = NULL;
 
@@ -69,7 +70,7 @@ Device* device_new() {
     if (instance_create != VK_SUCCESS) {
       fprintf(stderr, "Failed to create vulkan instance! %d\n", instance_create);
       device_free(device);
-      return NULL;
+      return DEVICE_ERROR_CREATE_HANDLE_FAIL;
     }
   
     free(all_instance_extensions);
@@ -79,7 +80,7 @@ Device* device_new() {
     if (physical_device_count == 0) {
       fprintf(stderr, "Failed to find any physical devices! %d\n", get_physical_devices);
       device_free(device);
-      return NULL;
+      return DEVICE_ERROR_NO_GPUS;
     }
   
     VkPhysicalDevice physical_devices[physical_device_count];
@@ -120,7 +121,7 @@ Device* device_new() {
     if (best_device == NULL) {
       fprintf(stderr, "Failed to find the best suitable physical device!\n");
       device_free(device);
-      return NULL;
+      return DEVICE_ERROR_NO_SUITABLE_GPU;
     }
     device->physical_device = best_device;
   
@@ -129,7 +130,7 @@ Device* device_new() {
     if (queue_family_count == 0) {
       fprintf(stderr, "No queue families found from physical device!\n");
       device_free(device);
-      return NULL;
+      return DEVICE_ERROR_NO_QUEUE_FAMILIES;
     }
   
     VkQueueFamilyProperties queue_families[queue_family_count];
@@ -148,7 +149,7 @@ Device* device_new() {
     if (graphics_family == UINT32_MAX) {
           fprintf(stderr, "Failed to get graphics support!\n");
           device_free(device);
-          return NULL;
+          return DEVICE_ERROR_NO_QUEUE_FAMILIES;
     }
 
     device->graphics_family = graphics_family;
@@ -217,13 +218,12 @@ Device* device_new() {
     if (device_create != VK_SUCCESS) {
       fprintf(stderr, "Failed to create vulkan device! %d\n", device_create);
       device_free(device);
-      return NULL;
+      return DEVICE_ERROR_CREATE_HANDLE_FAIL;
     }
   
     vkGetDeviceQueue(device->device, graphics_family, 0, &device->graphics_queue);
-
-  
-    return device;
+    *out_device = device;
+    return DEVICE_OK;
 }
 
 void device_free(Device* device) {
@@ -247,22 +247,19 @@ void device_wait(Device* device) {
     vkDeviceWaitIdle(device->device);
 }
 
-VkInstance device_get_vk_instance(Device* device) {
-    return device->instance;
+void device_get_instance(Device* device, void** out_instance) {
+  *out_instance = device->instance;
+}
+void device_get_device(Device* device, void** out_device) {
+  *out_device = device->device;
+}
+void device_get_physical_device(Device* device, void** out_physical_device) {
+  *out_physical_device = device->physical_device;
+}
+void device_get_graphics_family(Device* device, u32* out_graphics_family) {
+  *out_graphics_family = device->graphics_family;
+}
+void device_get_graphics_queue(Device* device, void** out_graphics_queue) {
+  *out_graphics_queue = device->graphics_queue;
 }
 
-VkDevice device_get_vk_device(Device* device) {
-    return device->device;
-}
-
-VkPhysicalDevice device_get_vk_physical_device(Device* device) {
-    return device->physical_device;
-}
-
-u32 device_get_graphics_family(Device* device) {
-    return device->graphics_family;
-}
-
-VkQueue device_get_graphics_queue(Device* device) {
-    return device->graphics_queue;
-}

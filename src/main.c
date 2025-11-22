@@ -1,5 +1,6 @@
 #include <stdio.h>
 
+#include <vulkan/vulkan.h>
 #include <SDL3/SDL_vulkan.h>
 
 #include "game/game.h"
@@ -14,46 +15,66 @@
 #define MAX_FRAMES_IN_FLIGHT 2
 
 int main() {
-  Game* game = game_new();
+  Game* game = NULL; 
+  game_new(&game);
   if (!game_start(game)) {
     fprintf(stderr, "Failed to start game!\n");
     return -1;
   }
 
-  Device* device = device_new();
+  Device* device = NULL;
+  DeviceResult device_result = device_new(&device);
+  if (device_result != DEVICE_OK) {
+    fprintf(stderr, "Failed to create device! %d\n", device_result);
+    return -1;
+  }
+
+  void* instance = NULL;
+  device_get_instance(device, &instance);
 
   VkSurfaceKHR surface = NULL;
   SDL_Window* window = game_get_window(game);
-  if (!SDL_Vulkan_CreateSurface(window, device_get_vk_instance(device), NULL, &surface)) {
+  if (!SDL_Vulkan_CreateSurface(window, instance, NULL, &surface)) {
     fprintf(stderr, "Failed to create vulkan surface from SDL3! %s\n ", SDL_GetError());
     return -1;
   }
 
-  Swapchain* swapchain = swapchain_new(device, (SwapchainOptions){
+  Swapchain* swapchain = NULL; 
+  SwapchainResult swapchain_result = swapchain_new(device, (SwapchainOptions){
     .oldSwapchain = NULL,
     .surface = surface,
     .min_image_count = MAX_FRAMES_IN_FLIGHT,
     .format = COLOR_BGRA8_SRGB,
-    .color_space = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR
-  });
+    .color_space = COLOR_SPACE_SRGB_NLINEAR
+  }, &swapchain);
+  if (swapchain_result != SWAPCHAIN_OK) {
+    fprintf(stderr, "Failed to create swapchain! %d\n", swapchain_result);
+    return -1;
+  }
 
-  Renderer* renderer = renderer_new(device, MAX_FRAMES_IN_FLIGHT);
+  Renderer* renderer = NULL;
+  RendererResult renderer_result = renderer_new(device, MAX_FRAMES_IN_FLIGHT, &renderer);
+  if (renderer_result != RENDERER_OK) {
+    fprintf(stderr, "Failed to create renderer! %d\n", renderer_result);
+    return -1;
+  }
 
-  Geometry* geometry = geometry_new(4, 6);
+  Geometry* geometry = NULL;
+  geometry_new(4, 6, &geometry);
   geometry_set_vertex(geometry, (Vertex){
-    .pos = {-1, -1, 0},
+    .pos = {-0.5, -0.5, 0},
     .col = {1, 1,1, 1}
   }, 0);
   geometry_set_vertex(geometry, (Vertex){
-    .pos = {1, -1, 0},
+    .pos = {0.5, -0.5, 0},
     .col = {1, 1,1, 1}
   }, 1);
   geometry_set_vertex(geometry, (Vertex){
-    .pos = {1, 1, 0},
+    .pos = {0.5, 0.5, 0},
     .col = {1, 1,1, 1}
   }, 2);
   geometry_set_vertex(geometry, (Vertex){
-    .pos = {-1, 1, 0},
+    .pos = {-0.5, 0.5, 0},
     .col = {1, 1,1, 1}
   }, 3);
   geometry_set_index(geometry, 0, 0);
@@ -64,35 +85,60 @@ int main() {
   geometry_set_index(geometry, 2, 4);
   geometry_set_index(geometry, 3, 5);
 
-  Buffer* vertex_buffer = buffer_new(device, (BufferOptions){
+  Buffer* vertex_buffer = NULL;
+  BufferResult vertex_buffer_result = buffer_new(device, (BufferOptions){
     .size = geometry->vertex_count * sizeof(Vertex),
     .usage = BUFFER_VERTEX,
     .sharing = SHARING_EXCLUSIVE,
     .memory_access = MEMORY_ACCESS_CPU_TO_GPU,
     .initial_data = geometry->vertices
-  });
+  }, &vertex_buffer);
+  if (vertex_buffer_result != BUFFER_OK) {
+    fprintf(stderr, "Failed to create vertex buffer! %d\n", vertex_buffer_result);
+    return -1;
+  }
 
-  Buffer* index_buffer = buffer_new(device, (BufferOptions){
+  Buffer* index_buffer = NULL;
+  BufferResult index_buffer_result = buffer_new(device, (BufferOptions){
     .size = geometry->index_count * sizeof(u32),
     .usage = BUFFER_INDEX,
     .sharing = SHARING_EXCLUSIVE,
     .memory_access = MEMORY_ACCESS_CPU_TO_GPU,
     .initial_data = geometry->indices
-  });
+  }, &index_buffer);
+  if (index_buffer_result != BUFFER_OK) {
+    fprintf(stderr, "Failed to create index buffer! %d\n", index_buffer_result);
+    return -1;
+  }
 
-  Shader* vertex_shader = shader_from_file(device, (ShaderOptions){
+  Shader* vertex_shader = NULL;
+  ShaderResult vertex_shader_result = shader_new(device, (ShaderOptions){
     .shader = "content/object.vert.spv",
     .type = SHADER_VERTEX
-  });
+  }, &vertex_shader);
+  if (vertex_shader_result != SHADER_OK) {
+    fprintf(stderr, "Failed to create vertex shader! %d\n", vertex_shader_result);
+    return -1;
+  }
 
-  Shader* fragment_shader = shader_from_file(device, (ShaderOptions){
+  Shader* fragment_shader = NULL;
+  ShaderResult fragment_shader_result = shader_new(device, (ShaderOptions){
     .shader = "content/object.frag.spv",
     .type = SHADER_FRAGMENT
-  });
+  }, &fragment_shader);
+  if (fragment_shader_result != SHADER_OK) {
+    fprintf(stderr, "Failed to create fragment shader! %d\n", fragment_shader_result);
+    return -1;
+  }
 
   Shader* shaders[2] = {vertex_shader, fragment_shader};
 
-  PipelineLayout* layout = pipeline_layout_new(device);
+  PipelineLayout* layout = NULL;
+  PipelineLayoutResult layout_result = pipeline_layout_new(device, &layout);
+  if (layout_result != PIPELINE_LAYOUT_OK) {
+    fprintf(stderr, "Failed to create pipeline layout! %d\n", layout_result);
+    return -1;
+  }
 
   PipelineInputAttribute attributes[2] = {
     (PipelineInputAttribute){
@@ -116,7 +162,11 @@ int main() {
     .stride = sizeof(Vertex)
   };
 
-  Pipeline* pipeline = pipeline_new(device, (PipelineOptions){
+  ColorFormat swapchain_color;
+  swapchain_get_color_format(swapchain, &swapchain_color);
+
+  Pipeline* pipeline = NULL;
+  PipelineResult pipeline_result = pipeline_new(device, (PipelineOptions){
     .shader_stages = {
       .shaders = shaders,
       .shader_count = 2
@@ -135,7 +185,7 @@ int main() {
       .depth_clamping = false,
       .discard_prims_until_rasterization = false,
       .polygon_mode = POLYGON_FILL,
-      .cull_mode = CULL_BACK,
+      .cull_mode = CULL_NONE,
       .front_face_direction = FRONT_FACING_C_CLOCKWISE,
       .bias_fragment_depth = false,
       .depth_bias_factor = 0,
@@ -153,7 +203,7 @@ int main() {
     },
     .rendering = {
       .colors = &(ColorFormat){
-        swapchain_get_color_format(swapchain)
+        swapchain_color
       },
       .color_count = 1,
       .depth = DEPTH_UNDEFINED,
@@ -161,10 +211,10 @@ int main() {
     },
     .depth_stencil = {
       .depth_bounds_test = false,
-      .depth_test = true,
-      .max_depth_bounds = 1,
+      .depth_test = false,
+      .max_depth_bounds = 0,
       .min_depth_bounds = 0,
-      .depth_write = true,
+      .depth_write = false,
       .depth_compare_op = COMPARE_OP_LESS,
       .stencil_test = false,
     },
@@ -180,20 +230,41 @@ int main() {
       }
     },
     .layout = layout
-  });
+  }, &pipeline);
+  if (pipeline_result != PIPELINE_OK) {
+    fprintf(stderr, "Failed to create pipeline! %d\n", pipeline_result);
+    return -1;
+  }
 
   while (game_is_alive(game)) {
     game_update(game);
-
-    const Frame* frame = renderer_begin_rendering(device, renderer, swapchain);
-    if (frame == NULL) {
+    
+    Frame* frame = NULL;
+    RenderBeginResult render_begin_result = renderer_begin_rendering(device, renderer, swapchain, &frame);
+    if (render_begin_result == RENDER_BEGIN_REBUILD_SWAPCHAIN) {
       continue;
+    } else if (render_begin_result != RENDER_BEGIN_OK) {
+      fprintf(stderr, "Failed to begin rendering! %d\n", render_begin_result);
+      return -1;
     }
+
+    void* cmd = NULL;
+    renderer_get_frame_cmd(frame, &cmd);
+
+    Swapchain* current_swapchain = NULL;
+    renderer_get_swapchain(renderer, &current_swapchain);
+
+    u32 image_index = 0;
+    renderer_get_image_index(renderer, &image_index);
+
+    void* image_views = NULL;
+    swapchain_get_image_views(current_swapchain, &image_views);
+    VkImageView image_view = ((VkImageView*)image_views)[image_index];
 
     VkRenderingAttachmentInfo rendering_attachment = {
       .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
       .pNext = NULL,
-      .imageView = swapchain_get_vk_image_views(renderer_get_swapchain(renderer))[renderer_get_image_index(renderer)],
+      .imageView = image_view,
       .imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
       .resolveMode = VK_RESOLVE_MODE_NONE,
       .resolveImageView = NULL,
@@ -205,11 +276,14 @@ int main() {
       }
     };
 
+    Extent swapchain_extent;
+    swapchain_get_extent(swapchain, &swapchain_extent);
+
     VkRenderingInfo rendering_info = {
       .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
       .pNext = NULL,
       .flags = 0,
-      .renderArea = {{0, 0}, swapchain_get_extent(swapchain)},
+      .renderArea = {{0, 0}, {swapchain_extent.width, swapchain_extent.height}},
       .layerCount = 1,
       .viewMask = 0,
       .colorAttachmentCount = 1,
@@ -218,7 +292,7 @@ int main() {
       .pDepthAttachment = NULL
     };
 
-    vkCmdBeginRendering(frame->cmd, &rendering_info);
+    vkCmdBeginRendering(cmd, &rendering_info);
 
     VkViewport viewport = {
       0,
@@ -233,18 +307,25 @@ int main() {
       .extent = {800, 600}
     };
 
-    VkBuffer vertex_buffer_handle = buffer_get_vk_buffer(vertex_buffer);
-    VkBuffer index_buffer_handle = buffer_get_vk_buffer(index_buffer);
-    VkDeviceSize offsets = {0};
-    
-    vkCmdSetViewport(frame->cmd, 0, 1, &viewport);
-    vkCmdSetScissor(frame->cmd, 0, 1, &scissor);
-    vkCmdBindPipeline(frame->cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_get_vk_pipeline(pipeline));
-    vkCmdBindVertexBuffers(frame->cmd, 0, 1, &vertex_buffer_handle, &offsets);
-    vkCmdBindIndexBuffer(frame->cmd, index_buffer_handle, 0, VK_INDEX_TYPE_UINT32);
-    vkCmdDrawIndexed(frame->cmd, geometry->index_count, 1, 0, 0, 0);
+    void* vertex_buffer_handle = NULL;
+    void* index_buffer_handle = NULL;
 
-    vkCmdEndRendering(frame->cmd);
+    buffer_get_buffer(vertex_buffer, &vertex_buffer_handle);
+    buffer_get_buffer(index_buffer, &index_buffer_handle);
+
+    void* pipeline_handle = NULL;
+    pipeline_get_pipeline(pipeline, &pipeline_handle);
+
+    VkDeviceSize offsets = 0;
+    
+    vkCmdSetViewport(cmd, 0, 1, &viewport);
+    vkCmdSetScissor(cmd, 0, 1, &scissor);
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_handle);
+    vkCmdBindVertexBuffers(cmd, 0, 1,(VkBuffer*)&vertex_buffer_handle, &offsets);
+    vkCmdBindIndexBuffer(cmd, index_buffer_handle, 0, VK_INDEX_TYPE_UINT32);
+    vkCmdDrawIndexed(cmd, geometry->index_count, 1, 0, 0, 0);
+
+    vkCmdEndRendering(cmd);
     renderer_end_rendering(device, renderer);
   }
 
@@ -259,7 +340,7 @@ int main() {
   pipeline_layout_free(device, layout);
   renderer_free(device, renderer);
   swapchain_free(device, swapchain);
-  vkDestroySurfaceKHR(device_get_vk_instance(device), surface, NULL);
+  vkDestroySurfaceKHR(instance, surface, NULL);
   device_free(device);
 
   game_close(game);

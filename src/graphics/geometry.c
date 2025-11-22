@@ -1,14 +1,14 @@
 #include "geometry.h"
 #include <stdlib.h>
 
-Geometry* geometry_new(u32 vertex_count, u32 index_count) {
+void geometry_new(u32 vertex_count, u32 index_count, Geometry** out_geometry) {
     Geometry* geometry = malloc(sizeof(Geometry));
     geometry->vertices = calloc(vertex_count, sizeof(Vertex));
     geometry->indices = calloc(index_count, sizeof(u32));
 
     geometry->vertex_count = vertex_count;
     geometry->index_count = index_count;
-    return geometry;
+    *out_geometry = geometry;
 }
 
 void geometry_free(Geometry* geometry) {

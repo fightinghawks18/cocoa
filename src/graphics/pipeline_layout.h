@@ -5,9 +5,14 @@
 
 typedef struct PipelineLayout PipelineLayout;
 
-PipelineLayout* pipeline_layout_new(Device* device);
+typedef enum {
+    PIPELINE_LAYOUT_OK, // Successfully created a pipeline layout
+    PIPELINE_LAYOUT_ERROR_CREATE_HANDLE_FAIL, // Failed to create the handle for the pipeline layout
+} PipelineLayoutResult;
+
+PipelineLayoutResult pipeline_layout_new(Device* device, PipelineLayout** out_layout);
 void pipeline_layout_free(Device* device, PipelineLayout* layout);
 
-VkPipelineLayout pipeline_layout_get_vk_layout(PipelineLayout* layout);
+void pipeline_layout_get_layout(PipelineLayout* layout, void** out_layout);
 
 #endif // PIPELINE_LAYOUT_H

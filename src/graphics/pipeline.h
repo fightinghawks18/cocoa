@@ -7,6 +7,8 @@
 #include "formats.h"
 #include "../int_types.h"
 
+typedef struct Pipeline Pipeline;
+
 typedef enum {
     INPUT_VERTEX,
     INPUT_INSTANCE
@@ -235,11 +237,14 @@ typedef struct {
     PipelineLayout* layout;
 } PipelineOptions;
 
-typedef struct Pipeline Pipeline;
+typedef enum {
+    PIPELINE_OK, // Successfully created a pipeline
+    PIPELINE_ERROR_CREATE_HANDLE_FAIL, // Failed to create the handle for the pipeline
+} PipelineResult;
 
-Pipeline* pipeline_new(Device* device, PipelineOptions options);
+PipelineResult pipeline_new(Device* device, PipelineOptions options, Pipeline** out_pipeline);
 void pipeline_free(Device* device, Pipeline* pipeline);
 
-VkPipeline pipeline_get_vk_pipeline(Pipeline* pipeline);
+void pipeline_get_pipeline(Pipeline* pipeline, void** out_pipeline);
 
 #endif // PIPELINE_H

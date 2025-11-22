@@ -1,6 +1,7 @@
 #include "pipeline_layout.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <vulkan/vulkan.h>
 
 
 typedef struct PipelineLayout {
@@ -8,7 +9,10 @@ typedef struct PipelineLayout {
 } PipelineLayout;
 
 
-PipelineLayout* pipeline_layout_new(Device* device) {
+PipelineLayoutResult pipeline_layout_new(Device* device, PipelineLayout** out_layout) {
+    void* device_handle = NULL;
+    device_get_device(device, &device_handle);
+
     PipelineLayout* layout = malloc(sizeof(PipelineLayout));
     layout->layout = NULL;
 
@@ -23,7 +27,7 @@ PipelineLayout* pipeline_layout_new(Device* device) {
     };
 
     VkResult create_pipeline_layout = vkCreatePipelineLayout(
-        device_get_vk_device(device), 
+        device_handle, 
         &pipeline_layout_info, 
         NULL, 
         &layout->layout
@@ -31,20 +35,24 @@ PipelineLayout* pipeline_layout_new(Device* device) {
     if (create_pipeline_layout != VK_SUCCESS) {
         fprintf(stderr, "Failed to create vulkan pipeline layout! %d\n", create_pipeline_layout);
         pipeline_layout_free(device, layout);
-        return NULL;
+        return PIPELINE_LAYOUT_ERROR_CREATE_HANDLE_FAIL;
     }
-    return layout;
 
+    *out_layout = layout;
+    return PIPELINE_LAYOUT_OK;
 }
 
 void pipeline_layout_free(Device* device, PipelineLayout* layout) {
+    void* device_handle = NULL;
+    device_get_device(device, &device_handle);
+
     if (layout->layout) {
-        vkDestroyPipelineLayout(device_get_vk_device(device), layout->layout, NULL);
+        vkDestroyPipelineLayout(device_handle, layout->layout, NULL);
         layout->layout = NULL;
     }
     free(layout);
 }
 
-VkPipelineLayout pipeline_layout_get_vk_layout(PipelineLayout* layout) {
-    return layout->layout;
+void pipeline_layout_get_layout(PipelineLayout* layout, void** out_layout) {
+    *out_layout = layout->layout;
 }

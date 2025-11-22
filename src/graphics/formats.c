@@ -1,5 +1,5 @@
 #include "formats.h"
-
+#include <vulkan/vulkan.h>
 
 static const VkFormat color_format_to_vk_format[] = {
     [COLOR_RGBA_UNDEFINED] = VK_FORMAT_UNDEFINED,
@@ -34,15 +34,16 @@ static const VkFormat vertex_format_to_vk_format[] = {
     [VERTEX_UNORM4] = VK_FORMAT_R8G8B8A8_UNORM,
 };
 
-VkFormat color_format_to_vk(ColorFormat format) {
-    return color_format_to_vk_format[format];
+void color_format_to_vk(ColorFormat format, int* vk_format) {
+    *vk_format = color_format_to_vk_format[format];
 }
 
-VkFormat depth_format_to_vk(DepthFormat format) {
-    return depth_format_to_vk_format[format];
+void depth_format_to_vk(DepthFormat format, int* vk_format) {
+    *vk_format = depth_format_to_vk_format[format];
 }
 
-VkFormat vertex_format_to_vk(VertexFormat format) {
-    return vertex_format_to_vk_format[format];
+void vertex_format_to_vk(VertexFormat format, int* vk_format) {
+    *vk_format = vertex_format_to_vk_format[format];
 }
+
 

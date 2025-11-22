@@ -2,6 +2,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <vulkan/vulkan.h>
 
 typedef struct Swapchain {
     VkSwapchainKHR swapchain;
@@ -9,24 +10,33 @@ typedef struct Swapchain {
     VkImage* images;
     VkImageView* image_views;
     
-    VkExtent2D extent;
-    VkFormat vk_color_format;
+    Extent extent;
     ColorFormat color_format;
-    VkColorSpaceKHR color_space;
+    ColorSpace color_space;
     
     u32 min_image_count;
     u32 image_count;
 } Swapchain;
 
-static void swapchain_create_images(Device* device, Swapchain* swapchain) {
+static VkColorSpaceKHR color_space_to_vk[] = {
+  [COLOR_SPACE_SRGB_NLINEAR] = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR
+};
+
+static bool swapchain_create_images(Device* device, Swapchain* swapchain) {
+    void* device_handle = NULL;
+    device_get_device(device, &device_handle);
+
     u32 swapchain_image_count = 0;
-    vkGetSwapchainImagesKHR(device_get_vk_device(device), swapchain->swapchain, &swapchain_image_count, NULL);
+    vkGetSwapchainImagesKHR(device_handle, swapchain->swapchain, &swapchain_image_count, NULL);
     
     VkImage* swapchain_images = malloc(swapchain_image_count * sizeof(VkImage));
-    vkGetSwapchainImagesKHR(device_get_vk_device(device), swapchain->swapchain, &swapchain_image_count, swapchain_images);
+    vkGetSwapchainImagesKHR(device_handle, swapchain->swapchain, &swapchain_image_count, swapchain_images);
 
     swapchain->images = swapchain_images;
     swapchain->image_count = swapchain_image_count;
+
+    int color_format = 0;
+    color_format_to_vk(swapchain->color_format, &color_format);
     
     swapchain->image_views = malloc(swapchain_image_count * sizeof(VkImageView));
     for (u32 i = 0; i < swapchain_image_count; i++) {
@@ -36,7 +46,7 @@ static void swapchain_create_images(Device* device, Swapchain* swapchain) {
         .flags = 0,
         .image = swapchain->images[i],
         .viewType = VK_IMAGE_VIEW_TYPE_2D,
-        .format = swapchain->vk_color_format,
+        .format = color_format,
         .components = {
           .r = VK_COMPONENT_SWIZZLE_IDENTITY,
           .b = VK_COMPONENT_SWIZZLE_IDENTITY,
@@ -52,31 +62,45 @@ static void swapchain_create_images(Device* device, Swapchain* swapchain) {
         }
       };
     
-      VkResult image_view_create = vkCreateImageView(device_get_vk_device(device), &image_view_info, NULL, &swapchain->image_views[i]);
+      VkResult image_view_create = vkCreateImageView(device_handle, &image_view_info, NULL, &swapchain->image_views[i]);
       if (image_view_create != VK_SUCCESS) {
         fprintf(stderr, "Failed to create vulkan image view for index %d! %d\n", i, image_view_create);
+        return false;
       }
     }
+    return true;
 }
 
 static void swapchain_free_images(Device* device, Swapchain* swapchain) {
+  void* device_handle = NULL;
+  device_get_device(device, &device_handle);
+  
   for (u32 i = 0; i < swapchain->image_count; i++) {
-      vkDestroyImageView(device_get_vk_device(device), swapchain->image_views[i], NULL);
+      vkDestroyImageView(device_handle, swapchain->image_views[i], NULL);
   }
   free(swapchain->image_views);
   free(swapchain->images);
 }
 
 static void swapchain_free_resources(Device* device, Swapchain* swapchain) {
+  void* device_handle = NULL;
+  device_get_device(device, &device_handle);
+
   swapchain_free_images(device, swapchain);
-  vkDestroySwapchainKHR(device_get_vk_device(device), swapchain->swapchain, NULL);
+  vkDestroySwapchainKHR(device_handle, swapchain->swapchain, NULL);
 }
 
-Swapchain* swapchain_new(Device* device, SwapchainOptions options) {
+SwapchainResult swapchain_new(Device* device, SwapchainOptions options, Swapchain** out_swapchain) {
+    void* device_handle = NULL;
+    device_get_device(device, &device_handle);
+
+    void* physical_device = NULL;
+    device_get_physical_device(device, &physical_device);
+
     Swapchain* swapchain = malloc(sizeof(Swapchain));
 
     VkSurfaceCapabilitiesKHR surfaceCapabilities;
-    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device_get_vk_physical_device(device), options.surface, &surfaceCapabilities);
+    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physical_device, options.surface, &surfaceCapabilities);
 
     u32 width = surfaceCapabilities.currentExtent.width;
     u32 height = surfaceCapabilities.currentExtent.height;
@@ -84,14 +108,17 @@ Swapchain* swapchain_new(Device* device, SwapchainOptions options) {
     // FORMAT:VK_FORMAT_B8G8R8A8_SRGB
     // COLORSPACE:VK_COLOR_SPACE_SRGB_NONLINEAR_KHR
 
+    int color_format = 0;
+    color_format_to_vk(options.format, &color_format);
+
     VkSwapchainCreateInfoKHR swapchain_info = {
       .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
       .pNext = NULL,
       .flags = 0,
       .surface = options.surface,
       .minImageCount = options.min_image_count,
-      .imageFormat = color_format_to_vk(options.format),
-      .imageColorSpace = options.color_space,
+      .imageFormat = color_format,
+      .imageColorSpace = color_space_to_vk[options.color_space],
       .imageExtent = {width, height},
       .imageArrayLayers = 1,
       .imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
@@ -101,26 +128,34 @@ Swapchain* swapchain_new(Device* device, SwapchainOptions options) {
       .preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR,
       .compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
       .presentMode = VK_PRESENT_MODE_FIFO_KHR,
-      .clipped = VK_TRUE,
-      .oldSwapchain = options.oldSwapchain
+      .clipped = VK_TRUE
     };
 
-    VkResult swapchain_create = vkCreateSwapchainKHR(device_get_vk_device(device), &swapchain_info, NULL, &swapchain->swapchain);
+    if (options.oldSwapchain != NULL) {
+      swapchain_info.oldSwapchain = options.oldSwapchain->swapchain;
+    }
+
+    VkResult swapchain_create = vkCreateSwapchainKHR(device_handle, &swapchain_info, NULL, &swapchain->swapchain);
     if (swapchain_create != VK_SUCCESS) {
       fprintf(stderr, "Failed to create vulkan swapchain! %d\n", swapchain_create);
       free(swapchain);
-      return NULL;
+      return SWAPCHAIN_ERROR_CREATE_HANDLE_FAIL;
     }
 
+    Extent extent = {width, height};
+
     swapchain->surface = options.surface;
-    swapchain->vk_color_format = color_format_to_vk(options.format);
     swapchain->color_format = options.format;
     swapchain->color_space = options.color_space;
     swapchain->min_image_count = options.min_image_count;
-    swapchain->extent = swapchain_info.imageExtent;
+    swapchain->extent = extent;
 
-    swapchain_create_images(device, swapchain);
-    return swapchain;
+    if (!swapchain_create_images(device, swapchain)) {
+      swapchain_free(device, swapchain);
+      return SWAPCHAIN_ERROR_IMAGE_VIEW_FAIL;
+    }
+    *out_swapchain = swapchain;
+    return SWAPCHAIN_OK;
 }
 
 void swapchain_free(Device* device, Swapchain* swapchain) {
@@ -131,15 +166,16 @@ void swapchain_free(Device* device, Swapchain* swapchain) {
 void swapchain_resize(Device* device, Swapchain* swapchain) {
     device_wait(device);
 
-    Swapchain* new_swapchain = swapchain_new(device, (SwapchainOptions){
-        .oldSwapchain = swapchain->swapchain,
+    Swapchain* new_swapchain = NULL;
+    SwapchainResult recreate_swapchain = swapchain_new(device, (SwapchainOptions){
+        .oldSwapchain = swapchain,
         .surface = swapchain->surface,
         .min_image_count = swapchain->min_image_count,
         .format = swapchain->color_format,
         .color_space = swapchain->color_space
-    });
-    if (new_swapchain == NULL) {
-        fprintf(stderr, "Failed to create new swapchain!");
+    }, &new_swapchain);
+    if (recreate_swapchain != SWAPCHAIN_OK) {
+        fprintf(stderr, "Failed to create new swapchain! %d", recreate_swapchain);
         return;
     }
     
@@ -148,38 +184,35 @@ void swapchain_resize(Device* device, Swapchain* swapchain) {
     free(new_swapchain);
 }
 
-VkSwapchainKHR swapchain_get_vk_swapchain(Swapchain* swapchain) {
-  return swapchain->swapchain;
+void swapchain_get_swapchain(Swapchain* swapchain, void** out_swapchain) {
+  *out_swapchain = swapchain->swapchain;
 }
 
-VkSurfaceKHR swapchain_get_vk_surface(Swapchain* swapchain) {
-  return swapchain->surface;
+void swapchain_get_surface(Swapchain* swapchain, void** out_surface) {
+  *out_surface = swapchain->surface;
 }
 
-VkImage* swapchain_get_vk_images(Swapchain* swapchain) {
-  return swapchain->images;
+void swapchain_get_images(Swapchain* swapchain, void** out_images) {
+  *out_images = swapchain->images;
 }
 
-VkImageView* swapchain_get_vk_image_views(Swapchain* swapchain) {
-  return swapchain->image_views;
+void swapchain_get_image_views(Swapchain* swapchain, void** out_image_views) {
+  *out_image_views = swapchain->image_views;
 }
 
-VkExtent2D swapchain_get_extent(Swapchain* swapchain) {
-  return swapchain->extent;
+void swapchain_get_extent(Swapchain* swapchain, Extent* out_extent) {
+  *out_extent = swapchain->extent;
 }
 
-VkFormat swapchain_get_vk_color_format(Swapchain* swapchain) {
-  return swapchain->vk_color_format;
+void swapchain_get_color_format(Swapchain* swapchain, ColorFormat* out_color_format) {
+  *out_color_format = swapchain->color_format;
 }
 
-ColorFormat swapchain_get_color_format(Swapchain* swapchain) {
-  return swapchain->color_format;
+void swapchain_get_color_space(Swapchain* swapchain, ColorSpace* out_color_space) {
+  *out_color_space = swapchain->color_space;
 }
 
-VkColorSpaceKHR swapchain_get_color_space(Swapchain* swapchain) {
-  return swapchain->color_space;
+void swapchain_get_image_count(Swapchain* swapchain, u32* out_image_count) {
+  *out_image_count = swapchain->image_count;
 }
 
-u32 swapchain_get_image_count(Swapchain* swapchain) {
-  return swapchain->image_count;
-}

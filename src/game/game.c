@@ -8,15 +8,14 @@ typedef struct Game {
   bool alive;
 } Game;
 
-Game* game_new(void) {
+void game_new(Game** out_game) {
     Game* game = malloc(sizeof(Game));
-    if (game == NULL) return NULL;
 
     game->alive = false;
     game->keep_alive = false;
     game->window = NULL;
 
-    return game;
+    *out_game = game;
 }
 
 bool game_start(Game* game) {

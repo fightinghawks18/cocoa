@@ -4,6 +4,8 @@
 #include "device.h"
 #include "../int_types.h"
 
+typedef struct Buffer Buffer;
+
 typedef enum BufferUsageFlags {
     BUFFER_NO_USE = 0,
     BUFFER_TRANSFER_SRC = 1 << 0,
@@ -37,12 +39,17 @@ typedef struct {
     void* initial_data;
 } BufferOptions;
 
-typedef struct Buffer Buffer;
+typedef enum {
+    BUFFER_OK, // Successfully created a buffer
+    BUFFER_ERROR_CREATE_HANDLE_FAIL, // Failed to create the handle for the buffer
+    BUFFER_ERROR_MEM_ALLOC_FAIL, // Failed to allocate memory object for the buffer (For explicit models)
+    BUFFER_ERROR_BIND_TO_MEM_FAIL // Failed to bind the buffer to memory object (For explicit models)
+} BufferResult;
 
-Buffer* buffer_new(Device* device, BufferOptions options);
+BufferResult buffer_new(Device* device, BufferOptions options, Buffer** out_buffer);
 void buffer_free(Device* device, Buffer* buffer);
 
 void buffer_map(Device* device, Buffer* buffer, u64 size, void* data);
-VkBuffer buffer_get_vk_buffer(Buffer* buffer);
+void buffer_get_buffer(Buffer* buffer, void** out_buffer);
 
 #endif // BUFFER_H
